@@ -133,7 +133,7 @@ fn fmt_duration(dur: &std::time::Duration) -> String {
     format!("{:.2}s", (dur.as_secs() as f64) + (dur.subsec_nanos() as f64 / 1e9))
 }
 
-pub fn generate_all(filename: &str, max_zoom: u8, bbox: &BBox, dest_dir: &str) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool) {
     let layers = Layers::from_file(filename);
     let dest_dir = Path::new(dest_dir);
 
@@ -144,6 +144,11 @@ pub fn generate_all(filename: &str, max_zoom: u8, bbox: &BBox, dest_dir: &str) {
     let mut last_zoom = 255;
     let mut num_tiles_done = 0;
     for tile in bbox.tiles() {
+        if tile.zoom() < min_zoom { continue; }
+
+        if num_tiles_done > 0 && num_tiles_done % 1_000 == 0 {
+            println!("zoom {}, done {} tiles", tile.zoom(), num_tiles_done);
+        }
         if tile.zoom() != last_zoom {
             if let Some(t) = started_current_zoom {
                 println!("Zoom {}, {} tile(s), done in {}", last_zoom, num_tiles_done, fmt_duration(&t.elapsed()));
@@ -157,10 +162,16 @@ pub fn generate_all(filename: &str, max_zoom: u8, bbox: &BBox, dest_dir: &str) {
         }
 
         let filename = dest_dir.join(tile.ts_path("pbf"));
+        if if_not_exists && filename.exists() {
+            continue;
+        }
 
         fs::create_dir_all(filename.parent().unwrap()).unwrap();
 
         let pbf = single_tile(&layers, &tile, &connection_pool);
+
+        //println!("tile {:?} pbf {:?}", tile, pbf);
+
         pbf.write_to_file(filename.to_str().unwrap());
         num_tiles_done += 1;
     }
