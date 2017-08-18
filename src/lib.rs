@@ -139,7 +139,7 @@ fn duration_to_float_secs(dur: &std::time::Duration) -> f64 {
     (dur.as_secs() as f64) + (dur.subsec_nanos() as f64 / 1e9)
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool, compress: bool) {
     let layers = Layers::from_file(filename);
     let dest_dir = Path::new(dest_dir);
     let metatile_scale = 8;
@@ -153,12 +153,14 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
     for metatile in Metatile::all(metatile_scale) {
         if metatile.zoom() < min_zoom { continue; }
 
-        if num_tiles_done > 0 && num_tiles_done % 1_000 == 0 {
-            println!("zoom {}, done {} metatiles", metatile.zoom(), num_tiles_done);
+        if num_tiles_done % 64 == 0 && num_tiles_done > 0 {
+            if let Some(t) = started_current_zoom {
+                println!("    Zoom {}, done {} metatiles, ({:.6} metatiles/sec)", last_zoom, num_tiles_done, (num_tiles_done as f64)/duration_to_float_secs(&t.elapsed()) );
+            }
         }
         if metatile.zoom() != last_zoom {
             if let Some(t) = started_current_zoom {
-                println!("Zoom {}, {} metatile(s), done in {} ({:.2} metatiles/sec)", last_zoom, num_tiles_done, fmt_duration(&t.elapsed()), (num_tiles_done as f64)/duration_to_float_secs(&t.elapsed()) );
+                println!("Zoom {}, {} metatile(s), done in {} ({:.6} metatiles/sec)", last_zoom, num_tiles_done, fmt_duration(&t.elapsed()), (num_tiles_done as f64)/duration_to_float_secs(&t.elapsed()) );
             }
             started_current_zoom = Some(Instant::now());
             last_zoom = metatile.zoom();
