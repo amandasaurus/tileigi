@@ -56,9 +56,8 @@ fn intersection<T: CoordinateType>(p1: &Point<T>, p2: &Point<T>, border: &Border
 }
 
 
-fn clip_ring_to_border<T: CoordinateType+Debug>(ring: LineString<T>, border: &Border<T>) -> Option<LineString<T>> {
+fn clip_ring_to_border<T: CoordinateType+Debug>(ring: &LineString<T>, border: &Border<T>) -> Option<LineString<T>> {
     //println!("\n\n\nBorder: {:?} Rings: {:?}", border, ring);
-    let mut new_points = Vec::with_capacity(ring.0.len());
 
     // in our rings, the last point is the same as the first point, and this algorithm doesn't
     // support that.
@@ -70,6 +69,8 @@ fn clip_ring_to_border<T: CoordinateType+Debug>(ring: LineString<T>, border: &Bo
         return None;
     }
     assert!(ring.0.len() >= 3);
+
+    let mut new_points = Vec::with_capacity(ring.0.len());
 
     //if is_inside(&ring.0[0], border) {
     //    new_points.push(ring.0[0]);
@@ -101,12 +102,11 @@ fn clip_ring_to_border<T: CoordinateType+Debug>(ring: LineString<T>, border: &Bo
 
 }
 
-fn clip_polygon_to_border<T: CoordinateType+Debug>(poly: Polygon<T>, border: &Border<T>) -> Option<Polygon<T>> {
-    let Polygon{ exterior, interiors } = poly;
+fn clip_polygon_to_border<T: CoordinateType+Debug>(poly: &Polygon<T>, border: &Border<T>) -> Option<Polygon<T>> {
 
-    let new_exterior = clip_ring_to_border(exterior, border);
+    let new_exterior = clip_ring_to_border(&poly.exterior, border);
     if let Some(new_exterior) = new_exterior {
-        let interiors: Vec<_> = interiors.into_iter().filter_map(|i| clip_ring_to_border(i, border)).collect();
+        let interiors: Vec<_> = poly.interiors.iter().filter_map(|i| clip_ring_to_border(i, border)).collect();
         Some(Polygon::new(new_exterior, interiors))
     } else {
         // if the exterior ring is totally outside, then don't bother any more
@@ -114,8 +114,8 @@ fn clip_polygon_to_border<T: CoordinateType+Debug>(poly: Polygon<T>, border: &Bo
     }
 }
 
-fn clip_multipolygon_to_border<T: CoordinateType+Debug>(mp: MultiPolygon<T>, border: &Border<T>) -> Option<MultiPolygon<T>> {
-    let polys: Vec<_> = mp.0.into_iter().filter_map(|p| clip_polygon_to_border(p, border)).collect();
+fn clip_multipolygon_to_border<T: CoordinateType+Debug>(mp: &MultiPolygon<T>, border: &Border<T>) -> Option<MultiPolygon<T>> {
+    let polys: Vec<_> = mp.0.iter().filter_map(|p| clip_polygon_to_border(p, border)).collect();
     if polys.len() == 0 {
         None
     } else {
@@ -123,15 +123,15 @@ fn clip_multipolygon_to_border<T: CoordinateType+Debug>(mp: MultiPolygon<T>, bor
     }
 }
 
-pub fn clip_polygon_to_bbox<T: CoordinateType+Debug>(poly: Polygon<T>, bbox: &Bbox<T>) -> Option<Polygon<T>> {
+pub fn clip_polygon_to_bbox<T: CoordinateType+Debug>(poly: &Polygon<T>, bbox: &Bbox<T>) -> Option<Polygon<T>> {
     clip_polygon_to_border(poly, &Border::XMin(bbox.xmin))
-           .and_then(|p| clip_polygon_to_border(p, &Border::XMax(bbox.xmax)))
-           .and_then(|p| clip_polygon_to_border(p, &Border::YMin(bbox.ymin)))
-           .and_then(|p| clip_polygon_to_border(p, &Border::YMax(bbox.ymax)))
+           .and_then(|p| clip_polygon_to_border(&p, &Border::XMax(bbox.xmax)))
+           .and_then(|p| clip_polygon_to_border(&p, &Border::YMin(bbox.ymin)))
+           .and_then(|p| clip_polygon_to_border(&p, &Border::YMax(bbox.ymax)))
 }
 
-pub fn clip_multipolygon_to_bbox<T: CoordinateType+Debug>(mp: MultiPolygon<T>, bbox: &Bbox<T>) -> Option<MultiPolygon<T>> {
-    let polys: Vec<_> = mp.0.into_iter().filter_map(|p| clip_polygon_to_bbox(p, bbox)).collect();
+pub fn clip_multipolygon_to_bbox<T: CoordinateType+Debug>(mp: &MultiPolygon<T>, bbox: &Bbox<T>) -> Option<MultiPolygon<T>> {
+    let polys: Vec<_> = mp.0.iter().filter_map(|p| clip_polygon_to_bbox(p, bbox)).collect();
     if polys.len() == 0 {
         None
     } else {
@@ -155,19 +155,19 @@ mod test {
     #[test]
     fn border_clip_simple_no_cut() {
         // Tests which should pass the polygon though directly
-        assert_eq!(clip_ring_to_border(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMax(10)),
+        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMax(10)),
             Some(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into())
         );
 
-        assert_eq!(clip_ring_to_border(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(0)),
+        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(0)),
             Some(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into())
         );
 
-        assert_eq!(clip_ring_to_border(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(-1)),
+        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(-1)),
             Some(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into())
         );
 
-        assert_eq!(clip_ring_to_border(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(10)),
+        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(10)),
             None
         );
     }
@@ -175,18 +175,18 @@ mod test {
     #[test]
     fn border_clip_boxes() {
         // here polygons are going to be cut
-        assert_eq!(clip_ring_to_border(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(1)),
+        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(1)),
             Some(vec![(1, 5), (5, 5), (5, 0), (1, 0), (1, 5)].into())
         );
-        assert_eq!(clip_ring_to_border(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::YMin(1)),
+        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::YMin(1)),
             Some(vec![(0, 1), (0, 5), (5, 5), (5, 1), (0, 1)].into())
         );
 
-        assert_eq!(clip_ring_to_border(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMax(2)),
+        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMax(2)),
             Some(vec![(0, 0), (0, 5), (2, 5), (2, 0), (0, 0)].into())
         );
 
-        assert_eq!(clip_ring_to_border(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::YMax(2)),
+        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::YMax(2)),
             Some(vec![(0, 0), (0, 2), (5, 2), (5, 0), (0, 0)].into())
         );
     }
@@ -194,7 +194,7 @@ mod test {
     #[test]
     fn border_clip_funny_shapes(){
         // Triangle pointing up
-        assert_eq!(clip_ring_to_border(vec![(0., 0.), (1., 5.), (2., 0.), (0., 0.)].into(), &Border::YMax(2.)),
+        assert_eq!(clip_ring_to_border(&vec![(0., 0.), (1., 5.), (2., 0.), (0., 0.)].into(), &Border::YMax(2.)),
             Some(vec![(0., 0.), (0.4, 2.), (1.6, 2.), (2., 0.), (0., 0.)].into())
         );
     }
@@ -206,7 +206,7 @@ mod test {
             vec![ vec![(1, 1), (1, 4), (4, 4), (4, 1), (1, 1)].into() ],
             );
 
-        let new_poly = clip_polygon_to_border(poly, &Border::XMax(3));
+        let new_poly = clip_polygon_to_border(&poly, &Border::XMax(3));
 
         // yes this is a degenerate polygon
         assert_eq!(new_poly, Some(Polygon::new(
@@ -224,7 +224,7 @@ mod test {
             );
 
         let bbox = Bbox{ xmin: 5, ymin: 5, xmax: 9, ymax: 9 };
-        let new_poly = clip_polygon_to_bbox(poly, &bbox);
+        let new_poly = clip_polygon_to_bbox(&poly, &bbox);
 
         // yes this is a degenerate polygon
         assert_eq!(new_poly, Some(Polygon::new(

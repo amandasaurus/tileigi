@@ -149,18 +149,20 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
     let mut started_current_zoom: Option<Instant> = None;
 
     let mut last_zoom = 255;
-    let mut num_tiles_done = 0;
+    let mut num_tiles_done: u64 = 0;
     for metatile in Metatile::all(metatile_scale) {
         if metatile.zoom() < min_zoom { continue; }
 
         if num_tiles_done % 64 == 0 && num_tiles_done > 0 {
             if let Some(t) = started_current_zoom {
-                println!("    Zoom {}, done {} metatiles, ({:.6} metatiles/sec)", last_zoom, num_tiles_done, (num_tiles_done as f64)/duration_to_float_secs(&t.elapsed()) );
+                let duration = duration_to_float_secs(&t.elapsed());
+                println!("    Zoom {}, done {} metatiles, ({:.6} metatiles/sec, {:.6} tiles/sec)", last_zoom, num_tiles_done, (num_tiles_done as f64)/duration, (num_tiles_done*(metatile_scale as u64)) as f64/duration );
             }
         }
         if metatile.zoom() != last_zoom {
             if let Some(t) = started_current_zoom {
-                println!("Zoom {}, {} metatile(s), done in {} ({:.6} metatiles/sec)", last_zoom, num_tiles_done, fmt_duration(&t.elapsed()), (num_tiles_done as f64)/duration_to_float_secs(&t.elapsed()) );
+                let duration = duration_to_float_secs(&t.elapsed());
+                println!("Zoom {}, {} metatile(s), done in {} ({:.6} metatiles/sec, {:.6} tiles/sec)", last_zoom, num_tiles_done, fmt_duration(&t.elapsed()), (num_tiles_done as f64)/duration, (num_tiles_done*(metatile_scale as u64)) as f64/duration );
             }
             started_current_zoom = Some(Instant::now());
             last_zoom = metatile.zoom();
@@ -205,7 +207,7 @@ fn simplify_geom(geom: Geometry<f64>, tolerance: f64) -> Geometry<f64> {
     }
 }
 
-fn clip_line<T: CoordinateType>(line: LineString<T>, bbox: &Bbox<T>) -> Option<Geometry<T>> {
+fn clip_line<T: CoordinateType>(line: &LineString<T>, bbox: &Bbox<T>) -> Option<Geometry<T>> {
     // This is a very simple approach, just split the line into many little segments and clip them
     // all.
     let mut segments: Vec<LineString<T>> = line.0.windows(2).filter_map(|points|
@@ -225,27 +227,27 @@ fn clip_line<T: CoordinateType>(line: LineString<T>, bbox: &Bbox<T>) -> Option<G
 }
 
 
-fn clip_to_bbox<T: CoordinateType+::std::fmt::Debug>(geom: Geometry<T>, bbox: &Bbox<T>) -> Option<Geometry<T>> {
-    match geom {
-        Geometry::Point(p) => {
-            if bbox.contains(&p) {
-                Some(Geometry::Point(p))
+fn clip_to_bbox<T: CoordinateType+::std::fmt::Debug>(geom: &Geometry<T>, bbox: &Bbox<T>) -> Option<Geometry<T>> {
+    match *geom {
+        Geometry::Point(ref p) => {
+            if bbox.contains(p) {
+                Some(Geometry::Point(p.clone()))
             } else {
                 None
             }
         },
-        Geometry::MultiPoint(mp) => {
-            let points: Vec<_> = mp.0.into_iter().filter(|p| bbox.contains(p)).collect();
+        Geometry::MultiPoint(ref mp) => {
+            let points: Vec<_> = mp.0.iter().filter(|p| bbox.contains(*p)).cloned().collect();
             if points.len() == 0 {
                 None
             } else {
                 Some(Geometry::MultiPoint(MultiPoint(points)))
             }
         },
-        Geometry::LineString(l) => clip_line(l, bbox),
-        Geometry::MultiLineString(ml) => {
+        Geometry::LineString(ref l) => clip_line(l, bbox),
+        Geometry::MultiLineString(ref ml) => {
             let mut lines = Vec::with_capacity(ml.0.len());
-            for clipped_line in ml.0.into_iter().filter_map(|l| clip_line(l, bbox)) {
+            for clipped_line in ml.0.iter().filter_map(|l| clip_line(l, bbox)) {
                 match clipped_line {
                     Geometry::LineString(l) => lines.push(l),
                     Geometry::MultiLineString(mut mls) => lines.append(&mut mls.0),
@@ -259,13 +261,13 @@ fn clip_to_bbox<T: CoordinateType+::std::fmt::Debug>(geom: Geometry<T>, bbox: &B
                 Some(MultiLineString(lines).into())
             }
         }
-        Geometry::Polygon(p) => sutherland_hodgeman::clip_polygon_to_bbox(p, bbox).map(Geometry::Polygon),
-        Geometry::MultiPolygon(p) => sutherland_hodgeman::clip_multipolygon_to_bbox(p, bbox).map(Geometry::MultiPolygon),
+        Geometry::Polygon(ref p) => sutherland_hodgeman::clip_polygon_to_bbox(p, bbox).map(Geometry::Polygon),
+        Geometry::MultiPolygon(ref p) => sutherland_hodgeman::clip_multipolygon_to_bbox(p, bbox).map(Geometry::MultiPolygon),
         Geometry::GeometryCollection(_) => unimplemented!(),
     }
 }
 
-fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i32>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
+fn clip_geometry_to_tiles(metatile: &Metatile, geom: &Geometry<i32>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
     // this is a very simple solution, there are much better ways to do it:
     // Faster would be to do horizontal and vertical slices one at a time. So slice all the geoms
     // on the left and that's ½ the tiles done. there will be much less geometry stuff then.
@@ -274,7 +276,7 @@ fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i32>) -> Vec<(slip
         let j = t.y() - metatile.y();
         // FIXME is the y the right way around?
         let bbox = Bbox{ xmin: (i*4096) as i32, xmax: ((i+1)*4096) as i32, ymin: (j*4096) as i32, ymax: ((j+1)*4096) as i32 };
-        (t, clip_to_bbox(geom.clone(), &bbox))
+        (t, clip_to_bbox(geom, &bbox))
     }).collect()
 }
 
@@ -365,7 +367,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 ));
 
             // clip geometry
-            let geom = match clip_to_bbox(geom, &geo::Bbox{ xmin: 0, xmax: new_layer.extent as i32, ymin: 0, ymax: new_layer.extent as i32 }) {
+            let geom = match clip_to_bbox(&geom, &geo::Bbox{ xmin: 0, xmax: new_layer.extent as i32, ymin: 0, ymax: new_layer.extent as i32 }) {
                 None => {
                     // geometry is outside the bbox, so skip
                     continue;
@@ -403,7 +405,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }
             }
 
-            let geoms = clip_geometry_to_tiles(&metatile, geom);
+            let geoms = clip_geometry_to_tiles(&metatile, &geom);
             for (tile, geom) in geoms.into_iter() {
                 if geom.is_none() { continue; }
                 let geom = geom.unwrap();
@@ -428,10 +430,10 @@ mod test {
     fn clip_point() {
         let bbox = Bbox{ xmin: 0., ymin: 0., xmax: 4096., ymax: 4096.};
 
-        assert_eq!(clip_to_bbox(Point::new(0., 0.).into(), &bbox), Some(Point::new(0., 0.).into()));
-        assert_eq!(clip_to_bbox(Point::new(-1., -1.).into(), &bbox), None);
-        assert_eq!(clip_to_bbox(Point::new(4000., 0.).into(), &bbox), Some(Point::new(4000., 0.).into()));
-        assert_eq!(clip_to_bbox(Point::new(5000., 0.).into(), &bbox), None);
+        assert_eq!(clip_to_bbox(&Point::new(0., 0.).into(), &bbox), Some(Point::new(0., 0.).into()));
+        assert_eq!(clip_to_bbox(&Point::new(-1., -1.).into(), &bbox), None);
+        assert_eq!(clip_to_bbox(&Point::new(4000., 0.).into(), &bbox), Some(Point::new(4000., 0.).into()));
+        assert_eq!(clip_to_bbox(&Point::new(5000., 0.).into(), &bbox), None);
     }
 
     #[test]
@@ -444,18 +446,18 @@ mod test {
         let p4 = Point::new(5000., 5000.);
         let p5 = Point::new(10., 1000.);
 
-        assert_eq!(clip_to_bbox(LineString(vec![p1, p2]).into(), &bbox), Some(LineString(vec![p1, p2]).into()));
-        assert_eq!(clip_to_bbox(LineString(vec![p4, p4]).into(), &bbox), None);
-        assert_eq!(clip_to_bbox(LineString(vec![p1, p5]).into(), &bbox), Some(LineString(vec![p1, p5]).into()));
-        assert_eq!(clip_to_bbox(LineString(vec![p1, p3]).into(), &bbox), Some(LineString(vec![p1, Point::new(10., 4096.)]).into()));
+        assert_eq!(clip_to_bbox(&LineString(vec![p1, p2]).into(), &bbox), Some(LineString(vec![p1, p2]).into()));
+        assert_eq!(clip_to_bbox(&LineString(vec![p4, p4]).into(), &bbox), None);
+        assert_eq!(clip_to_bbox(&LineString(vec![p1, p5]).into(), &bbox), Some(LineString(vec![p1, p5]).into()));
+        assert_eq!(clip_to_bbox(&LineString(vec![p1, p3]).into(), &bbox), Some(LineString(vec![p1, Point::new(10., 4096.)]).into()));
 
-        assert_eq!(clip_to_bbox(LineString(vec![p1, p2, p5]).into(), &bbox),
+        assert_eq!(clip_to_bbox(&LineString(vec![p1, p2, p5]).into(), &bbox),
             Some(MultiLineString(vec![
                 LineString(vec![p1, p2]),
                 LineString(vec![p2, p5]),
                                 ]).into()));
 
-        assert_eq!(clip_to_bbox(LineString(vec![p1, p2, p5, p4]).into(), &bbox),
+        assert_eq!(clip_to_bbox(&LineString(vec![p1, p2, p5, p4]).into(), &bbox),
             Some(MultiLineString(vec![
                 LineString(vec![p1, p2]),
                 LineString(vec![p2, p5]),
@@ -474,7 +476,7 @@ mod test {
         let p5 = Point::new(10., 1000.);
 
         assert_eq!(clip_to_bbox(
-                MultiLineString(vec![
+                &MultiLineString(vec![
                     LineString(vec![p1, p2, p5]),
                     LineString(vec![p1, p2, p5, p4])
                 ]).into(), &bbox),
