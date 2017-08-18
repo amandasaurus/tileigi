@@ -6,6 +6,8 @@ extern crate yaml_rust;
 extern crate mapbox_vector_tile;
 extern crate wkb;
 extern crate geo;
+#[macro_use]
+extern crate serde_json;
 
 use std::fs::File;
 use std::fs;
@@ -142,11 +144,14 @@ fn duration_to_float_secs(dur: &std::time::Duration) -> f64 {
 pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool, compress: bool) {
     let layers = Layers::from_file(filename);
     let dest_dir = Path::new(dest_dir);
+    fs::create_dir_all(dest_dir).unwrap();
     let metatile_scale = 8;
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
 
     let mut started_current_zoom: Option<Instant> = None;
+
+    write_tilejson(&layers, &connection_pool, dest_dir);
 
     let mut last_zoom = 255;
     let mut num_tiles_done: u64 = 0;
@@ -190,7 +195,79 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
 
 
     }
+}
 
+fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &Path) {
+    let tilejson = json!({
+        "tilejson": "2.2.0",
+        "tiles": [
+            "http://www.example.com/{z}/{x}/{y}.pbf"
+        ],
+        "minzoom": 0,
+        "maxzoom": 14,
+        "format": "pbf",
+        "vector_layers": layers.layers.iter().map(|layer| {
+            let layer_name = layer["id"].as_str().unwrap().clone();
+            let columns = columns_for_layer(layer, connection_pool);
+            let minzoom = layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(layers.global_minzoom) as u8;
+            let maxzoom = layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(layers.global_maxzoom) as u8;
+            let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
+            json!({
+                "id": layer_name,
+                "description": "",
+                "minzoom": minzoom,
+                "maxzoom": maxzoom,
+                "fields": columns.into_iter().collect::<HashMap<_, _>>(),
+            })
+        }).collect::<Vec<_>>(),
+    });
+
+    let mut tilejson_file = File::create(dest.join("index.json")).unwrap();
+    serde_json::to_writer_pretty(tilejson_file, &tilejson).unwrap();
+    
+}
+
+fn columns_for_layer(layer: &Yaml, connection_pool: &ConnectionPool) -> Vec<(String, String)> {
+    let layer_name = layer["id"].as_str().unwrap().clone();
+
+    let conn = connection_pool.connection_for_layer(layer_name);
+    
+    let table = layer["Datasource"]["table"].as_str().unwrap();
+    let table = table
+        .replace("!pixel_width!", "0").replace("!pixel_height!","0")
+        .replace("!bbox!", "ST_Point(0, 0)")
+        .replace("!scale_denominator!", "0");
+
+    let query = format!("SELECT * from {table} LIMIT 0", table=table);
+    let res = conn.query(&query, &[]).unwrap();
+
+    res.columns().iter().filter(|c| c.name() != "way")
+        .filter_map(|column| {
+            let name = column.name().to_owned();
+
+            // Sometimes a NULL value can be returned, hence the dance with Option<Value>
+            let column_type: Option<String> = match column.type_().name() {
+                "float4" => Some("Number".to_string()),
+                "float8" => Some("Number".to_string()),
+                "text" => Some("String".to_string()),
+                "int4" => Some("Number".to_string()),
+                "numeric" => Some("Number".to_string()),
+                
+                // why is there unknown?
+                "unknown" => None,
+                x => {
+                    eprintln!("Postgres type {:?} not known", x);
+                    unimplemented!()
+                },
+            };
+
+            if let Some(column_type) = column_type {
+                Some((name, column_type))
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn simplify_geom(geom: Geometry<f64>, tolerance: f64) -> Geometry<f64> {
@@ -276,6 +353,7 @@ fn clip_geometry_to_tiles(metatile: &Metatile, geom: &Geometry<i32>) -> Vec<(sli
         let j = t.y() - metatile.y();
         // FIXME is the y the right way around?
         let bbox = Bbox{ xmin: (i*4096) as i32, xmax: ((i+1)*4096) as i32, ymin: (j*4096) as i32, ymax: ((j+1)*4096) as i32 };
+        //println!("clip: tile {:?} bbox {:?} geom {:?}", t, bbox, geom);
         (t, clip_to_bbox(geom, &bbox))
     }).collect()
 }
@@ -343,10 +421,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             mvt.add_layer(new_layer.clone());
         }
 
-        let extent = new_layer.extent as f64;
+        let extent = (new_layer.extent as f64)*(metatile.size() as f64);
 
         let columns: Vec<_> = res.columns().iter().skip(1).filter(|c| c.name() != "way").collect();
 
+        //println!("metatile {:?}", metatile);
         for row in res.iter() {
             // First object is the ST_AsBinary
             // TODO Does this do any copies that we don't want?
@@ -359,15 +438,18 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let simplification: f64 = if metatile.zoom() == layers.global_maxzoom { pixel_size } else { 8. * pixel_size };
             let geom = simplify_geom(geom, simplification);
 
+            //println!("got some geoms {:?} minx {} miny {} maxx {} maxy {}", geom, minx, miny, maxx, maxy);
+            //println!("extent {}", extent);
             // TODO there might be a problem with y direction here??
             let geom: geo::Geometry<i32> = geom.map_coords(&|&(x, y)|
                 (
                     (((x - minx) / (maxx - minx))*extent).round() as i32,
-                    (((y - miny) / (maxy - miny))*extent).round() as i32,
+                    (((maxy - y) / (maxy - miny))*extent).round() as i32,
                 ));
+            //println!("got some geoms {:?}", geom);
 
             // clip geometry
-            let geom = match clip_to_bbox(&geom, &geo::Bbox{ xmin: 0, xmax: new_layer.extent as i32, ymin: 0, ymax: new_layer.extent as i32 }) {
+            let geom = match clip_to_bbox(&geom, &geo::Bbox{ xmin: 0, xmax: extent as i32, ymin: 0, ymax: extent as i32 }) {
                 None => {
                     // geometry is outside the bbox, so skip
                     continue;
@@ -409,6 +491,13 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             for (tile, geom) in geoms.into_iter() {
                 if geom.is_none() { continue; }
                 let geom = geom.unwrap();
+
+                let i = (tile.x() - metatile.x()) as i32;
+                let j = (tile.y() - metatile.y()) as i32;
+
+                // FIXME do this in place
+                let geom: geo::Geometry<i32> = geom.map_coords(&|&(x, y)|
+                    ( x - (4096*i), y - (4096*j) ));
 
                 let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                 let mvt_tile = results.get_mut(&tile).unwrap();
