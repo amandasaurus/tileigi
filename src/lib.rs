@@ -19,7 +19,7 @@ use yaml_rust::{YamlLoader, Yaml};
 use postgres::{Connection, TlsMode};
 use postgres::params::ConnectParams;
 
-use slippy_map_tiles::BBox;
+use slippy_map_tiles::{BBox, Metatile};
 
 use geo::*;
 use geo::algorithm::simplify::Simplify;
@@ -129,13 +129,20 @@ impl Layers {
     }
 }
 
+#[inline]
 fn fmt_duration(dur: &std::time::Duration) -> String {
-    format!("{:.2}s", (dur.as_secs() as f64) + (dur.subsec_nanos() as f64 / 1e9))
+    format!("{:.2}s", duration_to_float_secs(dur))
+}
+
+#[inline]
+fn duration_to_float_secs(dur: &std::time::Duration) -> f64 {
+    (dur.as_secs() as f64) + (dur.subsec_nanos() as f64 / 1e9)
 }
 
 pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool) {
     let layers = Layers::from_file(filename);
     let dest_dir = Path::new(dest_dir);
+    let metatile_scale = 8;
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
 
@@ -143,37 +150,41 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
 
     let mut last_zoom = 255;
     let mut num_tiles_done = 0;
-    for tile in bbox.tiles() {
-        if tile.zoom() < min_zoom { continue; }
+    for metatile in Metatile::all(metatile_scale) {
+        if metatile.zoom() < min_zoom { continue; }
 
         if num_tiles_done > 0 && num_tiles_done % 1_000 == 0 {
-            println!("zoom {}, done {} tiles", tile.zoom(), num_tiles_done);
+            println!("zoom {}, done {} metatiles", metatile.zoom(), num_tiles_done);
         }
-        if tile.zoom() != last_zoom {
+        if metatile.zoom() != last_zoom {
             if let Some(t) = started_current_zoom {
-                println!("Zoom {}, {} tile(s), done in {}", last_zoom, num_tiles_done, fmt_duration(&t.elapsed()));
+                println!("Zoom {}, {} metatile(s), done in {} ({:.2} metatiles/sec)", last_zoom, num_tiles_done, fmt_duration(&t.elapsed()), (num_tiles_done as f64)/duration_to_float_secs(&t.elapsed()) );
             }
             started_current_zoom = Some(Instant::now());
-            last_zoom = tile.zoom();
+            last_zoom = metatile.zoom();
             num_tiles_done = 0;
         }
-        if tile.zoom() > max_zoom {
+        if metatile.zoom() > max_zoom {
             break;
         }
 
-        let filename = dest_dir.join(tile.ts_path("pbf"));
-        if if_not_exists && filename.exists() {
-            continue;
+
+        let tiles = single_metatile(&layers, &metatile, &connection_pool);
+
+        // FIXME the tile exists check needs to work with metatiles
+        //if if_not_exists && filename.exists() {
+        //    continue;
+        //}
+
+        for (tile, pbf) in tiles.into_iter() {
+            let filename = dest_dir.join(tile.ts_path("pbf"));
+            fs::create_dir_all(filename.parent().unwrap()).unwrap();
+
+            pbf.write_to_file(filename.to_str().unwrap());
         }
-
-        fs::create_dir_all(filename.parent().unwrap()).unwrap();
-
-        let pbf = single_tile(&layers, &tile, &connection_pool);
-
-        //println!("tile {:?} pbf {:?}", tile, pbf);
-
-        pbf.write_to_file(filename.to_str().unwrap());
         num_tiles_done += 1;
+
+
     }
 
 }
@@ -252,19 +263,33 @@ fn clip_to_bbox<T: CoordinateType+::std::fmt::Debug>(geom: Geometry<T>, bbox: &B
     }
 }
 
+fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i32>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
+    // this is a very simple solution, there are much better ways to do it:
+    // Faster would be to do horizontal and vertical slices one at a time. So slice all the geoms
+    // on the left and that's ½ the tiles done. there will be much less geometry stuff then.
+    metatile.tiles().into_iter().map(|t| {
+        let i = t.x() - metatile.x();
+        let j = t.y() - metatile.y();
+        // FIXME is the y the right way around?
+        let bbox = Bbox{ xmin: (i*4096) as i32, xmax: ((i+1)*4096) as i32, ymin: (j*4096) as i32, ymax: ((j+1)*4096) as i32 };
+        (t, clip_to_bbox(geom.clone(), &bbox))
+    }).collect()
+}
 
 
-pub fn single_tile(layers: &Layers, tile: &slippy_map_tiles::Tile, connection_pool: &ConnectionPool) -> mapbox_vector_tile::Tile {
+pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool) -> Vec<(slippy_map_tiles::Tile, mapbox_vector_tile::Tile)> {
     //println!("Tile {:?}", tile);
+    let empty_tile = mapbox_vector_tile::Tile::new();
 
-    let mut result_tile = mapbox_vector_tile::Tile::new();
+    let mut results: HashMap<slippy_map_tiles::Tile, mapbox_vector_tile::Tile> = metatile.tiles().into_iter().map(|t| (t, empty_tile.clone())).collect();
+
     for layer in layers.layers.iter() {
         let minzoom = layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(layers.global_minzoom) as u8;
         let maxzoom = layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(layers.global_maxzoom) as u8;
         let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
 
         // Skip layers which are not on this zoom
-        if tile.zoom() < minzoom || tile.zoom() > maxzoom {
+        if metatile.zoom() < minzoom || metatile.zoom() > maxzoom {
             continue;
         }
 
@@ -275,9 +300,9 @@ pub fn single_tile(layers: &Layers, tile: &slippy_map_tiles::Tile, connection_po
         let table = layer["Datasource"]["table"].as_str().unwrap();
         // FIXME should this be 4096??
         // FIXME not confident about this calculation.
-        let canvas_size = 256.;
-        let ll = tile.sw_corner().to_3857();
-        let ur = tile.ne_corner().to_3857();
+        let canvas_size = 256.*(metatile.size() as f64);
+        let ll = metatile.sw_corner().to_3857();
+        let ur = metatile.ne_corner().to_3857();
 
         // TODO vtiles have y positive going down, is this correct??
         let minx = ll.0 as f64;
@@ -300,12 +325,18 @@ pub fn single_tile(layers: &Layers, tile: &slippy_map_tiles::Tile, connection_po
             //println!("This query has scale_denominator, skipping.");
             continue;
         }
-        let mut new_layer = mapbox_vector_tile::Layer::new(layer_name.to_string());
+
         let query = format!("SELECT ST_AsBinary(way), * from {table} where way && {bbox}", table=table, bbox=bbox);
         let res = conn.query(&query, &[]).unwrap();
 
         if res.is_empty() {
             continue;
+        }
+
+        // Ensure all tiles in this metatile have this layer
+        let new_layer = mapbox_vector_tile::Layer::new(layer_name.to_string());
+        for mvt in results.values_mut() {
+            mvt.add_layer(new_layer.clone());
         }
 
         let extent = new_layer.extent as f64;
@@ -319,10 +350,9 @@ pub fn single_tile(layers: &Layers, tile: &slippy_map_tiles::Tile, connection_po
 
             let geom: geo::Geometry<f64> = wkb::wkb_to_geom(wkb_bytes.as_slice());
 
-
-            // TODO not sure abou this
+            // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
-            let simplification: f64 = if tile.zoom() == layers.global_maxzoom { pixel_size } else { 8. * pixel_size };
+            let simplification: f64 = if metatile.zoom() == layers.global_maxzoom { pixel_size } else { 8. * pixel_size };
             let geom = simplify_geom(geom, simplification);
 
             // TODO there might be a problem with y direction here??
@@ -340,6 +370,7 @@ pub fn single_tile(layers: &Layers, tile: &slippy_map_tiles::Tile, connection_po
                 },
                 Some(g) => g,
             };
+
                     
             let mut properties = mapbox_vector_tile::Properties::new();
 
@@ -370,16 +401,21 @@ pub fn single_tile(layers: &Layers, tile: &slippy_map_tiles::Tile, connection_po
                 }
             }
 
-            let feature = mapbox_vector_tile::Feature::new(geom, properties);
-            new_layer.add_feature(feature);
+            let geoms = clip_geometry_to_tiles(&metatile, geom);
+            for (tile, geom) in geoms.into_iter() {
+                if geom.is_none() { continue; }
+                let geom = geom.unwrap();
+
+                let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
+                let mvt_tile = results.get_mut(&tile).unwrap();
+                mvt_tile.add_feature(layer_name, feature);
+            }
 
         }
         
-        result_tile.layers.push(new_layer);
-
     }
 
-    result_tile
+    results.into_iter().collect()
 
 }
 
