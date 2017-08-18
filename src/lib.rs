@@ -141,6 +141,34 @@ fn duration_to_float_secs(dur: &std::time::Duration) -> f64 {
     (dur.as_secs() as f64) + (dur.subsec_nanos() as f64 / 1e9)
 }
 
+fn scale_denominator_for_zoom(zoom: u8) -> &'static str {
+    match zoom {
+        0 => "250000000000",
+        1 => "500000000",
+        2 => "200000000",
+        3 => "100000000",
+        4 => "50000000",
+        5 => "25000000",
+        6 => "12500000",
+        7 => "6500000",
+        8 => "3000000",
+        9 => "1500000",
+        10 => "750000",
+        11 => "400000",
+        12 => "200000",
+        13 => "100000",
+        14 => "50000",
+        15 => "25000",
+        16 => "12500",
+        17 => "5000",
+        18 => "2500",
+        _ => {
+            eprintln!("Unsupported zoom ({})", zoom);
+            unimplemented!();
+        }
+    }
+}
+
 pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool, compress: bool) {
     let layers = Layers::from_file(filename);
     let dest_dir = Path::new(dest_dir);
@@ -157,6 +185,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
     let mut num_tiles_done: u64 = 0;
     for metatile in Metatile::all(metatile_scale) {
         if metatile.zoom() < min_zoom { continue; }
+        if num_tiles_done >= 1000 { break; }
 
         if num_tiles_done % 64 == 0 && num_tiles_done > 0 {
             if let Some(t) = started_current_zoom {
@@ -401,12 +430,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
         let pixel_width = format!("{}", tile_width / canvas_size);
         let pixel_height = format!("{}", tile_height / canvas_size);
-        let table = table.replace("!pixel_width!", &pixel_width).replace("!pixel_height!", &pixel_height).replace("!bbox!", &bbox);
-        if table.contains("!scale_denominator!") {
-            // FIXME implement this
-            //println!("This query has scale_denominator, skipping.");
-            continue;
-        }
+
+        // Would it be faster to have a prepared statement which we then execute many times,
+        // with these !params! being $1 etc?
+        // TODO use prepared statements
+        let table = table.replace("!pixel_width!", &pixel_width).replace("!pixel_height!", &pixel_height).replace("!bbox!", &bbox).replace("!scale_denominator!", scale_denominator_for_zoom(metatile.zoom()));
 
         let query = format!("SELECT ST_AsBinary(way), * from {table} where way && {bbox}", table=table, bbox=bbox);
         let res = conn.query(&query, &[]).unwrap();
