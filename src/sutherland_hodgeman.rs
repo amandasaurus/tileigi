@@ -1,5 +1,6 @@
 use geo::*;
 
+use std::fmt::Debug;
 
 // A border we want
 #[derive(Debug,Clone,Copy)]
@@ -55,13 +56,19 @@ fn intersection<T: CoordinateType>(p1: &Point<T>, p2: &Point<T>, border: &Border
 }
 
 
-fn clip_ring_to_border<T: CoordinateType>(ring: LineString<T>, border: &Border<T>) -> Option<LineString<T>> {
+fn clip_ring_to_border<T: CoordinateType+Debug>(ring: LineString<T>, border: &Border<T>) -> Option<LineString<T>> {
     //println!("\n\n\nBorder: {:?} Rings: {:?}", border, ring);
     let mut new_points = Vec::with_capacity(ring.0.len());
 
     // in our rings, the last point is the same as the first point, and this algorithm doesn't
     // support that.
     
+    if ring.0.len() < 3 {
+        //eprintln!("\n\n\nBorder: {:?} Rings: {:?}", border, ring);
+        //eprintln!("{:?}", ring.0);
+        // FIXME something better
+        return None;
+    }
     assert!(ring.0.len() >= 3);
 
     //if is_inside(&ring.0[0], border) {
@@ -94,7 +101,7 @@ fn clip_ring_to_border<T: CoordinateType>(ring: LineString<T>, border: &Border<T
 
 }
 
-fn clip_polygon_to_border<T: CoordinateType>(poly: Polygon<T>, border: &Border<T>) -> Option<Polygon<T>> {
+fn clip_polygon_to_border<T: CoordinateType+Debug>(poly: Polygon<T>, border: &Border<T>) -> Option<Polygon<T>> {
     let Polygon{ exterior, interiors } = poly;
 
     let new_exterior = clip_ring_to_border(exterior, border);
@@ -107,7 +114,7 @@ fn clip_polygon_to_border<T: CoordinateType>(poly: Polygon<T>, border: &Border<T
     }
 }
 
-fn clip_multipolygon_to_border<T: CoordinateType>(mp: MultiPolygon<T>, border: &Border<T>) -> Option<MultiPolygon<T>> {
+fn clip_multipolygon_to_border<T: CoordinateType+Debug>(mp: MultiPolygon<T>, border: &Border<T>) -> Option<MultiPolygon<T>> {
     let polys: Vec<_> = mp.0.into_iter().filter_map(|p| clip_polygon_to_border(p, border)).collect();
     if polys.len() == 0 {
         None
@@ -116,14 +123,14 @@ fn clip_multipolygon_to_border<T: CoordinateType>(mp: MultiPolygon<T>, border: &
     }
 }
 
-pub fn clip_polygon_to_bbox<T: CoordinateType>(poly: Polygon<T>, bbox: &Bbox<T>) -> Option<Polygon<T>> {
+pub fn clip_polygon_to_bbox<T: CoordinateType+Debug>(poly: Polygon<T>, bbox: &Bbox<T>) -> Option<Polygon<T>> {
     clip_polygon_to_border(poly, &Border::XMin(bbox.xmin))
            .and_then(|p| clip_polygon_to_border(p, &Border::XMax(bbox.xmax)))
            .and_then(|p| clip_polygon_to_border(p, &Border::YMin(bbox.ymin)))
            .and_then(|p| clip_polygon_to_border(p, &Border::YMax(bbox.ymax)))
 }
 
-pub fn clip_multipolygon_to_bbox<T: CoordinateType>(mp: MultiPolygon<T>, bbox: &Bbox<T>) -> Option<MultiPolygon<T>> {
+pub fn clip_multipolygon_to_bbox<T: CoordinateType+Debug>(mp: MultiPolygon<T>, bbox: &Bbox<T>) -> Option<MultiPolygon<T>> {
     let polys: Vec<_> = mp.0.into_iter().filter_map(|p| clip_polygon_to_bbox(p, bbox)).collect();
     if polys.len() == 0 {
         None

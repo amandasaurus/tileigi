@@ -201,13 +201,21 @@ fn clip_line<T: CoordinateType>(line: LineString<T>, bbox: &Bbox<T>) -> Option<G
 }
 
 
-fn clip_to_bbox<T: CoordinateType>(geom: Geometry<T>, bbox: &Bbox<T>) -> Option<Geometry<T>> {
+fn clip_to_bbox<T: CoordinateType+::std::fmt::Debug>(geom: Geometry<T>, bbox: &Bbox<T>) -> Option<Geometry<T>> {
     match geom {
         Geometry::Point(p) => {
             if bbox.contains(&p) {
                 Some(Geometry::Point(p))
             } else {
                 None
+            }
+        },
+        Geometry::MultiPoint(mp) => {
+            let points: Vec<_> = mp.0.into_iter().filter(|p| bbox.contains(p)).collect();
+            if points.len() == 0 {
+                None
+            } else {
+                Some(Geometry::MultiPoint(MultiPoint(points)))
             }
         },
         Geometry::LineString(l) => clip_line(l, bbox),
@@ -227,7 +235,9 @@ fn clip_to_bbox<T: CoordinateType>(geom: Geometry<T>, bbox: &Bbox<T>) -> Option<
                 Some(MultiLineString(lines).into())
             }
         }
-        _ => unimplemented!(),
+        Geometry::Polygon(p) => sutherland_hodgeman::clip_polygon_to_bbox(p, bbox).map(Geometry::Polygon),
+        Geometry::MultiPolygon(p) => sutherland_hodgeman::clip_multipolygon_to_bbox(p, bbox).map(Geometry::MultiPolygon),
+        Geometry::GeometryCollection(_) => unimplemented!(),
     }
 }
 
