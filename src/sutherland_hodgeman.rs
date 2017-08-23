@@ -20,36 +20,37 @@ fn is_inside<T: CoordinateType>(p: &Point<T>, border: &Border<T>) -> bool {
     }
 }
 
-fn intersection<T: CoordinateType>(p1: &Point<T>, p2: &Point<T>, border: &Border<T>) -> Point<T> {
-    //println!("\nstart of intersection");
+fn intersection<T: CoordinateType+Debug>(p1: &Point<T>, p2: &Point<T>, border: &Border<T>) -> Point<T> {
     let x1 = p1.x();
     let y1 = p1.y();
     let x2 = p2.x();
     let y2 = p2.y();
+
+    // The algorithms are rearranged to reduce the risk of an i32 integer overflow
     match *border {
         Border::XMin(xmin) => {
             let x = xmin;
             //println!("p1 {:?} p1 {:?} border {:?}", p1, p2, border);
-            assert!(p1.x() != p2.x());
-            let y = (y2-y1)*(x - x1)/(x2 - x1) + y1;
+            assert_ne!(x1, x2);
+            let y = ((y2-y1)/(x2 - x1))*(x - x1) + y1;
             Point::new(x, y)
         },
         Border::XMax(xmax) => {
             let x = xmax;
-            assert!(p1.x() != p2.x());
-            let y = (y2-y1)*(x - x1)/(x2 - x1) + y1;
+            assert_ne!(x1, x2);
+            let y = ((y2-y1)/(x2-x1))*(x - x1) + y1;
             Point::new(x, y)
         },
         Border::YMin(ymin) => {
             let y = ymin;
-            assert!(p1.y() != p2.y());
-            let x = (x2-x1)*(y - y1)/(y2 - y1) + x1;
+            assert_ne!(y1, y2);
+            let x = ((x2-x1)/(y2-y1))*(y - y1) + x1;
             Point::new(x, y)
         },
         Border::YMax(ymax) => {
             let y = ymax;
-            assert!(p1.y() != p2.y());
-            let x = (x2-x1)*(y - y1)/(y2 - y1) + x1;
+            assert_ne!(y1, y2);
+            let x = ((x2-x1)/(y2-y1))*(y - y1) + x1;
             Point::new(x, y)
         },
     }

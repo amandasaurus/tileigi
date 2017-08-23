@@ -21,7 +21,7 @@ use yaml_rust::{YamlLoader, Yaml};
 use postgres::{Connection, TlsMode};
 use postgres::params::ConnectParams;
 
-use slippy_map_tiles::{BBox, Metatile};
+use slippy_map_tiles::{BBox, Metatile, MetatilesIterator};
 
 use geo::*;
 use geo::algorithm::simplify::Simplify;
@@ -97,7 +97,16 @@ impl Layers {
                         .and_then(|t| Some(t.as_str() == Some("postgis")))
                 )
                 .unwrap_or(false)
-            ).cloned().collect();
+            )
+            // FIXME finish this thing
+            //.map(|layer| {
+            //    layer["Datasource"]["table"].as_str().unwrap()
+            //        .replace("!bbox!", "$1")
+            //        .replace("!pixel_width!", "$2").replace("!pixel_height!", "$3")
+            //        .replace("!scale_denominator!", "$4");
+            //    layer
+            //})
+            .cloned().collect();
 
         Layers{ layers: layers, global_minzoom: global_minzoom, global_maxzoom: global_maxzoom }
 
@@ -183,9 +192,8 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
 
     let mut last_zoom = 255;
     let mut num_tiles_done: u64 = 0;
-    for metatile in Metatile::all(metatile_scale) {
+    for metatile in MetatilesIterator::new_for_bbox_zoom(metatile_scale, bbox, min_zoom, max_zoom) {
         if metatile.zoom() < min_zoom { continue; }
-        if num_tiles_done >= 1000 { break; }
 
         if num_tiles_done % 64 == 0 && num_tiles_done > 0 {
             if let Some(t) = started_current_zoom {
@@ -205,6 +213,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
         if metatile.zoom() > max_zoom {
             break;
         }
+        //println!("metatile {:?}", metatile);
 
 
         let tiles = single_metatile(&layers, &metatile, &connection_pool);
@@ -389,7 +398,7 @@ fn clip_geometry_to_tiles(metatile: &Metatile, geom: &Geometry<i32>) -> Vec<(sli
 
 
 pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool) -> Vec<(slippy_map_tiles::Tile, mapbox_vector_tile::Tile)> {
-    //println!("Tile {:?}", tile);
+    //println!("Metatile {:?}", metatile);
     let empty_tile = mapbox_vector_tile::Tile::new();
 
     let mut results: HashMap<slippy_map_tiles::Tile, mapbox_vector_tile::Tile> = metatile.tiles().into_iter().map(|t| (t, empty_tile.clone())).collect();
@@ -405,6 +414,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         }
 
         let layer_name = layer["id"].as_str().unwrap().clone();
+        //println!("layer_name {}", layer_name);
 
         let conn = connection_pool.connection_for_layer(layer_name);
         
@@ -458,8 +468,19 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // First object is the ST_AsBinary
             // TODO Does this do any copies that we don't want?
             let wkb_bytes: Vec<u8> = row.get(0);
+            //println!("wkb_bytes {:?}", wkb_bytes);
 
-            let geom: geo::Geometry<f64> = wkb::wkb_to_geom(wkb_bytes.as_slice());
+            let geom: geo::Geometry<f64> = match wkb::wkb_to_geom(&mut wkb_bytes.as_slice()) {
+                Err(e) => {
+                    // TODO investigate this more
+                    eprintln!("Metatile: {:?} WKB reading error {:?}, first few bytes geom: {:?}", metatile, e, &wkb_bytes[..10]);
+                    continue;
+                },
+                Ok(g) => g,
+            };
+
+            // TODO would it be faster to do the simplication on integer geoms, not float? Change
+            // the order of these?
 
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
@@ -468,13 +489,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             //println!("got some geoms {:?} minx {} miny {} maxx {} maxy {}", geom, minx, miny, maxx, maxy);
             //println!("extent {}", extent);
-            // TODO there might be a problem with y direction here??
             let geom: geo::Geometry<i32> = geom.map_coords(&|&(x, y)|
                 (
                     (((x - minx) / (maxx - minx))*extent).round() as i32,
                     (((maxy - y) / (maxy - miny))*extent).round() as i32,
                 ));
-            //println!("got some geoms {:?}", geom);
 
             // clip geometry
             let geom = match clip_to_bbox(&geom, &geo::Bbox{ xmin: 0, xmax: extent as i32, ymin: 0, ymax: extent as i32 }) {
