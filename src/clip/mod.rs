@@ -50,20 +50,37 @@ fn is_on_border<T: CoordinateType>(p: &Point<T>, border: &Border<T>) -> bool {
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 enum LineBorderIntersection<T: CoordinateType> {
+
+    /// All points are inside the border
     AllInside,
+
+    /// All points are outside the border
     AllOutside,
+
+    /// Some are inside, some outside
     Intersections(Vec<IntersectionOption<T>>),
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 enum IntersectionOption<T: CoordinateType> {
+    /// This point is inside the border
     Inside,
+
+    /// This point is outside the border
     Outside,
+
+    /// This point is outside the border and the next point is inside, and this (x, y) is where it
+    /// crosses the border.
     Entry((T, T)),
+
+    /// This point is inside the border and the next point is outside, and this (x, y) is where it
+    /// crosses the border.
     Exit((T, T)),
 }
 
 
+/// given 2 points, and a border, return the (x, y) where the line between the two points crosses
+/// the border. This assumes that both points are on different sizes of the border
 fn intersection<T: CoordinateType>(p1: &Point<T>, p2: &Point<T>, border: &Border<T>) -> (T, T) {
     let x1 = p1.x();
     let y1 = p1.y();
@@ -249,6 +266,8 @@ fn clip_multilinestring_to_border<T: CoordinateType>(mls: &MultiLineString<T>, b
     }
 }
 
+/// Clip a geometry to a border. None iff the geometry is entirely outside it, otherwise Some(g)
+/// with the new geometry clipped to that border.
 fn clip_to_border<T: CoordinateType>(geom: &Geometry<T>, border: &Border<T>) -> Option<Geometry<T>> {
     match *geom {
         Geometry::Point(ref p) => clip_point_to_border(p, border),
@@ -269,16 +288,84 @@ pub fn clip_to_bbox<T: CoordinateType+::std::fmt::Debug>(geom: &Geometry<T>, bbo
        .and_then(|geom| clip_to_border(&geom, &Border::YMax(bbox.ymax)))
 }
 
+fn slice_box(geom: &Geometry<i32>, metatile_scale: u8, zoom: u8, tile_x0: u32, tile_y0: u32, x0: i32, y0: i32, size: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
+    if metatile_scale == 1 {
+        // FIXME do this at the caller and save a .clone()
+        // Should do this in the caller, where metatile_scale == 2, where we own the geometry
+        // I have a feeling there are too many clones here
+        return vec![(slippy_map_tiles::Tile::new(zoom, tile_x0, tile_y0).unwrap(), Some(geom.clone()))];
+    }
+
+    let mut results = Vec::with_capacity((metatile_scale*metatile_scale) as usize);
+
+    let half = size / 2;
+    let tile_half = (metatile_scale/2) as u32;
+
+    if let Some(left) = clip_to_border(geom, &Border::XMax(x0+half as i32)) {
+        if let Some(topleft) = clip_to_border(geom, &Border::YMax(y0+half as i32)) {
+            let mut tiles = slice_box(&topleft, metatile_scale/2, zoom, tile_x0, tile_y0, x0, y0, size/2);
+            if metatile_scale == 2 {
+                // this is only one tile
+                match tiles.len() {
+                    0 => {},
+                    1 => { results.push(tiles.remove(0)); },
+                    _ => { unreachable!(); },
+                }
+            } else {
+                results.append(&mut tiles);
+            }
+        }
+
+        if let Some(bottomleft) = clip_to_border(geom, &Border::YMin(y0+half as i32)) {
+            let mut tiles = slice_box(&bottomleft, metatile_scale/2, zoom, tile_x0, tile_y0+tile_half, x0, y0+half, size/2);
+            if metatile_scale == 2 {
+                // this is only one tile
+                match tiles.len() {
+                    0 => {},
+                    1 => { results.push(tiles.remove(0)); },
+                    _ => { unreachable!(); },
+                }
+            } else {
+                results.append(&mut tiles);
+            }
+        }
+    }
+
+    if let Some(right) = clip_to_border(geom, &Border::XMin(x0+half as i32)) {
+        if let Some(topright) = clip_to_border(geom, &Border::YMax(y0+half as i32)) {
+            let mut tiles = slice_box(&topright, metatile_scale/2, zoom, tile_x0+tile_half, tile_y0, x0+half, y0, size/2);
+            if metatile_scale == 2 {
+                // this is only one tile
+                match tiles.len() {
+                    0 => {},
+                    1 => { results.push(tiles.remove(0)); },
+                    _ => { unreachable!(); },
+                }
+            } else {
+                results.append(&mut tiles);
+            }
+        }
+
+        if let Some(bottomright) = clip_to_border(geom, &Border::YMin(y0+half as i32)) {
+            let mut tiles = slice_box(&bottomright, metatile_scale/2, zoom, tile_x0+tile_half, tile_y0+tile_half, x0+half, y0+half, size/2);
+            if metatile_scale == 2 {
+                // this is only one tile
+                match tiles.len() {
+                    0 => {},
+                    1 => { results.push(tiles.remove(0)); },
+                    _ => { unreachable!(); },
+                }
+            } else {
+                results.append(&mut tiles);
+            }
+        }
+    }
+
+
+
+    results
+}
+
 pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: &Geometry<i32>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
-    // this is a very simple solution, there are much better ways to do it:
-    // Faster would be to do horizontal and vertical slices one at a time. So slice all the geoms
-    // on the left and that's ½ the tiles done. there will be much less geometry stuff then.
-    metatile.tiles().into_iter().map(|t| {
-        let i = t.x() - metatile.x();
-        let j = t.y() - metatile.y();
-        // FIXME is the y the right way around?
-        let bbox = Bbox{ xmin: (i*4096) as i32, xmax: ((i+1)*4096) as i32, ymin: (j*4096) as i32, ymax: ((j+1)*4096) as i32 };
-        //println!("clip: tile {:?} bbox {:?} geom {:?}", t, bbox, geom);
-        (t, clip_to_bbox(geom, &bbox))
-    }).collect()
+    slice_box(geom, metatile.scale(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i32*4096)
 }
