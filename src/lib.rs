@@ -26,6 +26,7 @@ use slippy_map_tiles::{BBox, Metatile, MetatilesIterator};
 use geo::*;
 use geo::algorithm::simplify::Simplify;
 use geo::algorithm::map_coords::MapCoords;
+use geo::algorithm::map_coords::MapCoordsInplace;
 use geo::algorithm::boundingbox::BoundingBox;
 use geo::algorithm::contains::Contains;
 
@@ -472,14 +473,12 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             loop {
                 if geoms.len() <= 1 { break; }
                 if let Some((tile, geom)) = geoms.pop() {
-                    let geom = geom.unwrap();
+                    let mut geom = geom.unwrap();
 
                     let i = (tile.x() - metatile.x()) as i32;
                     let j = (tile.y() - metatile.y()) as i32;
 
-                    // FIXME do this in place
-                    let geom: geo::Geometry<i32> = geom.map_coords(&|&(x, y)|
-                        ( x - (4096*i), y - (4096*j) ));
+                    geom.map_coords_inplace(&|&(x, y)| ( x - (4096*i), y - (4096*j) ));
 
                     let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                     let mvt_tile = results.get_mut(&tile).unwrap();
@@ -489,13 +488,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             if geoms.is_empty() { continue; }
             if let Some((tile, geom)) = geoms.pop() {
-                let geom = geom.unwrap();
+                let mut geom = geom.unwrap();
                 let i = (tile.x() - metatile.x()) as i32;
                 let j = (tile.y() - metatile.y()) as i32;
 
-                // FIXME do this in place
-                let geom: geo::Geometry<i32> = geom.map_coords(&|&(x, y)|
-                    ( x - (4096*i), y - (4096*j) ));
+                geom.map_coords_inplace(&|&(x, y)| ( x - (4096*i), y - (4096*j) ));
 
                 let feature = mapbox_vector_tile::Feature::new(geom, properties);
                 let mvt_tile = results.get_mut(&tile).unwrap();
