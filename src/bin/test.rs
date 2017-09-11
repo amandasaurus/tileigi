@@ -10,6 +10,14 @@ use slippy_map_tiles::BBox;
 
 use tilegen::*;
 
+fn fmt_duration(dur: &std::time::Duration) -> String {
+    format!("{:.2}s", duration_to_float_secs(dur))
+}
+
+fn duration_to_float_secs(dur: &std::time::Duration) -> f64 {
+    (dur.as_secs() as f64) + (dur.subsec_nanos() as f64 / 1e9)
+}
+
 fn main() {
 
     let matches = App::new("test")
@@ -36,9 +44,6 @@ fn main() {
 
     generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest_dir, if_not_exists, compress);
 
-    let e = start.elapsed();
-    let elapsed = (e.as_secs() as f64) + (e.subsec_nanos() as f64 / 1e9);
-
-    println!("Finished in {}", elapsed);
+    println!("Finished in {}", fmt_duration(&start.elapsed()));
 
 }
