@@ -460,11 +460,36 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }
             }
 
-            let geoms = clip_geometry_to_tiles(&metatile, &geom);
-            for (tile, geom) in geoms.into_iter() {
-                if geom.is_none() { continue; }
-                let geom = geom.unwrap();
+            // In cases where there is only one geometry here, we don't want to clone the
+            // `properties`, and instead move it. If there are N geometries, we want to do N-1
+            // clones, and 1 move. Hence the duplication with the loop.
+            //
+            // We want to do this in order, so we reverse the vec, and the pop from the end
+            // (which is the original front).
+            let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, &geom).into_iter().filter(|&(t, ref g)| g.is_some()).collect();
+            geoms.reverse();
 
+            loop {
+                if geoms.len() <= 1 { break; }
+                if let Some((tile, geom)) = geoms.pop() {
+                    let geom = geom.unwrap();
+
+                    let i = (tile.x() - metatile.x()) as i32;
+                    let j = (tile.y() - metatile.y()) as i32;
+
+                    // FIXME do this in place
+                    let geom: geo::Geometry<i32> = geom.map_coords(&|&(x, y)|
+                        ( x - (4096*i), y - (4096*j) ));
+
+                    let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
+                    let mvt_tile = results.get_mut(&tile).unwrap();
+                    mvt_tile.add_feature(layer_name, feature);
+                }
+            }
+
+            if geoms.is_empty() { continue; }
+            if let Some((tile, geom)) = geoms.pop() {
+                let geom = geom.unwrap();
                 let i = (tile.x() - metatile.x()) as i32;
                 let j = (tile.y() - metatile.y()) as i32;
 
@@ -472,7 +497,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 let geom: geo::Geometry<i32> = geom.map_coords(&|&(x, y)|
                     ( x - (4096*i), y - (4096*j) ));
 
-                let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
+                let feature = mapbox_vector_tile::Feature::new(geom, properties);
                 let mvt_tile = results.get_mut(&tile).unwrap();
                 mvt_tile.add_feature(layer_name, feature);
             }
