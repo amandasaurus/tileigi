@@ -118,8 +118,34 @@ fn intersection<T: CoordinateType>(p1: &Point<T>, p2: &Point<T>, border: &Border
 
 
 fn calculate_intersections<T: CoordinateType>(linestring: &LineString<T>, border: &Border<T>) -> LineBorderIntersection<T> {
+    // First we look if everything is all inside or all outside, and early return then, Then we
+    // don't have to allocate a vec for the intersections
     let mut all_inside = true;
     let mut not_all_outside = false;
+
+    let point_inside = is_inside(&linestring.0[0], border);
+    all_inside &= point_inside;
+    not_all_outside |= point_inside;
+
+    for (idx, point) in linestring.0.iter().skip(1).enumerate() {
+        let point_inside = is_inside(point, border);
+
+        all_inside &= point_inside;
+        not_all_outside |= point_inside;
+    }
+
+    let all_outside = ! not_all_outside;
+    if all_inside {
+        return LineBorderIntersection::AllInside;
+    } else if all_outside {
+        return LineBorderIntersection::AllOutside;
+    }
+
+    // otherwise, we need to look at the intersections
+    // I'm not happy with this, since you need to iterate over the linestring, twice and I wish
+    // there was a way to do it only once.
+
+    // FIXME little bit of code duplicating calculaing the AllInside and AllOutside
 
     #[allow(unused_assignments)]
     let mut last_inside: bool = false;
