@@ -15,6 +15,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::collections::{HashSet, HashMap};
 use std::time::Instant;
+use std::borrow::{Cow, Borrow};
 
 use yaml_rust::{YamlLoader, Yaml};
 
@@ -423,7 +424,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 ));
 
             // clip geometry
-            let geom = match clip_to_bbox(&geom, &geo::Bbox{ xmin: 0, xmax: extent as i32, ymin: 0, ymax: extent as i32 }) {
+            let geom = match clip_to_bbox(Cow::Owned(geom), &geo::Bbox{ xmin: 0, xmax: extent as i32, ymin: 0, ymax: extent as i32 }) {
                 None => {
                     // geometry is outside the bbox, so skip
                     continue;
@@ -467,7 +468,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             //
             // We want to do this in order, so we reverse the vec, and the pop from the end
             // (which is the original front).
-            let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, &geom).into_iter().filter(|&(t, ref g)| g.is_some()).collect();
+            let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, Cow::Owned(geom)).into_iter().filter(|&(t, ref g)| g.is_some()).collect();
             geoms.reverse();
 
             loop {

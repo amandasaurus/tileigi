@@ -1,5 +1,6 @@
 use std::collections::{HashSet, HashMap};
 use std::fmt::Debug;
+use std::borrow::{Cow, Borrow};
 
 use yaml_rust::{YamlLoader, Yaml};
 
@@ -294,7 +295,7 @@ fn clip_multilinestring_to_border<T: CoordinateType>(mls: &MultiLineString<T>, b
 
 /// Clip a geometry to a border. None iff the geometry is entirely outside it, otherwise Some(g)
 /// with the new geometry clipped to that border.
-fn clip_to_border<T: CoordinateType>(geom: &Geometry<T>, border: &Border<T>) -> Option<Geometry<T>> {
+fn clip_to_border<T: CoordinateType>(geom: Cow<Geometry<T>>, border: &Border<T>) -> Option<Geometry<T>> {
     match *geom {
         Geometry::Point(ref p) => clip_point_to_border(p, border),
         Geometry::LineString(ref ls) => clip_linestring_to_border(ls, border),
@@ -307,19 +308,16 @@ fn clip_to_border<T: CoordinateType>(geom: &Geometry<T>, border: &Border<T>) -> 
 }
 
 
-pub fn clip_to_bbox<T: CoordinateType+::std::fmt::Debug>(geom: &Geometry<T>, bbox: &Bbox<T>) -> Option<Geometry<T>> {
+pub fn clip_to_bbox<T: CoordinateType+::std::fmt::Debug>(geom: Cow<Geometry<T>>, bbox: &Bbox<T>) -> Option<Geometry<T>> {
     clip_to_border(geom, &Border::XMin(bbox.xmin))
-       .and_then(|geom| clip_to_border(&geom, &Border::XMax(bbox.xmax)))
-       .and_then(|geom| clip_to_border(&geom, &Border::YMin(bbox.ymin)))
-       .and_then(|geom| clip_to_border(&geom, &Border::YMax(bbox.ymax)))
+       .and_then(|geom| clip_to_border(Cow::Owned(geom), &Border::XMax(bbox.xmax)))
+       .and_then(|geom| clip_to_border(Cow::Owned(geom), &Border::YMin(bbox.ymin)))
+       .and_then(|geom| clip_to_border(Cow::Owned(geom), &Border::YMax(bbox.ymax)))
 }
 
-fn slice_box(geom: &Geometry<i32>, metatile_scale: u8, zoom: u8, tile_x0: u32, tile_y0: u32, x0: i32, y0: i32, size: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
+fn slice_box(geom: Cow<Geometry<i32>>, metatile_scale: u8, zoom: u8, tile_x0: u32, tile_y0: u32, x0: i32, y0: i32, size: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
     if metatile_scale == 1 {
-        // FIXME do this at the caller and save a .clone()
-        // Should do this in the caller, where metatile_scale == 2, where we own the geometry
-        // I have a feeling there are too many clones here
-        return vec![(slippy_map_tiles::Tile::new(zoom, tile_x0, tile_y0).unwrap(), Some(geom.clone()))];
+        return vec![(slippy_map_tiles::Tile::new(zoom, tile_x0, tile_y0).unwrap(), Some(geom.into_owned()))];
     }
 
     let mut results = Vec::with_capacity((metatile_scale*metatile_scale) as usize);
@@ -327,9 +325,9 @@ fn slice_box(geom: &Geometry<i32>, metatile_scale: u8, zoom: u8, tile_x0: u32, t
     let half = size / 2;
     let tile_half = (metatile_scale/2) as u32;
 
-    if let Some(left) = clip_to_border(geom, &Border::XMax(x0+half as i32)) {
-        if let Some(topleft) = clip_to_border(geom, &Border::YMax(y0+half as i32)) {
-            let mut tiles = slice_box(&topleft, metatile_scale/2, zoom, tile_x0, tile_y0, x0, y0, size/2);
+    if let Some(left) = clip_to_border(Cow::Borrowed(geom.borrow()), &Border::XMax(x0+half as i32)) {
+        if let Some(topleft) = clip_to_border(Cow::Borrowed(&left), &Border::YMax(y0+half as i32)) {
+            let mut tiles = slice_box(Cow::Owned(topleft), metatile_scale/2, zoom, tile_x0, tile_y0, x0, y0, size/2);
             if metatile_scale == 2 {
                 // this is only one tile
                 match tiles.len() {
@@ -342,8 +340,8 @@ fn slice_box(geom: &Geometry<i32>, metatile_scale: u8, zoom: u8, tile_x0: u32, t
             }
         }
 
-        if let Some(bottomleft) = clip_to_border(geom, &Border::YMin(y0+half as i32)) {
-            let mut tiles = slice_box(&bottomleft, metatile_scale/2, zoom, tile_x0, tile_y0+tile_half, x0, y0+half, size/2);
+        if let Some(bottomleft) = clip_to_border(Cow::Owned(left), &Border::YMin(y0+half as i32)) {
+            let mut tiles = slice_box(Cow::Owned(bottomleft), metatile_scale/2, zoom, tile_x0, tile_y0+tile_half, x0, y0+half, size/2);
             if metatile_scale == 2 {
                 // this is only one tile
                 match tiles.len() {
@@ -358,8 +356,8 @@ fn slice_box(geom: &Geometry<i32>, metatile_scale: u8, zoom: u8, tile_x0: u32, t
     }
 
     if let Some(right) = clip_to_border(geom, &Border::XMin(x0+half as i32)) {
-        if let Some(topright) = clip_to_border(geom, &Border::YMax(y0+half as i32)) {
-            let mut tiles = slice_box(&topright, metatile_scale/2, zoom, tile_x0+tile_half, tile_y0, x0+half, y0, size/2);
+        if let Some(topright) = clip_to_border(Cow::Borrowed(&right), &Border::YMax(y0+half as i32)) {
+            let mut tiles = slice_box(Cow::Owned(topright), metatile_scale/2, zoom, tile_x0+tile_half, tile_y0, x0+half, y0, size/2);
             if metatile_scale == 2 {
                 // this is only one tile
                 match tiles.len() {
@@ -372,8 +370,8 @@ fn slice_box(geom: &Geometry<i32>, metatile_scale: u8, zoom: u8, tile_x0: u32, t
             }
         }
 
-        if let Some(bottomright) = clip_to_border(geom, &Border::YMin(y0+half as i32)) {
-            let mut tiles = slice_box(&bottomright, metatile_scale/2, zoom, tile_x0+tile_half, tile_y0+tile_half, x0+half, y0+half, size/2);
+        if let Some(bottomright) = clip_to_border(Cow::Owned(right), &Border::YMin(y0+half as i32)) {
+            let mut tiles = slice_box(Cow::Owned(bottomright), metatile_scale/2, zoom, tile_x0+tile_half, tile_y0+tile_half, x0+half, y0+half, size/2);
             if metatile_scale == 2 {
                 // this is only one tile
                 match tiles.len() {
@@ -392,6 +390,6 @@ fn slice_box(geom: &Geometry<i32>, metatile_scale: u8, zoom: u8, tile_x0: u32, t
     results
 }
 
-pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: &Geometry<i32>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
+pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Cow<Geometry<i32>>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
     slice_box(geom, metatile.scale(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i32*4096)
 }
