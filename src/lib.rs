@@ -309,7 +309,7 @@ fn columns_for_layer(layer: &Yaml, connection_pool: &ConnectionPool) -> Vec<(Str
         .collect()
 }
 
-fn simplify_geom(geom: Geometry<f64>, tolerance: f64) -> Geometry<f64> {
+fn simplify_geom(geom: Geometry<i64>, tolerance: i64) -> Geometry<i64> {
     match geom {
         // Can't simplify a Point. let's hope this doesn't do a copy or memory move or something
         Geometry::Point(p) => Geometry::Point(p),
@@ -410,18 +410,27 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // TODO would it be faster to do the simplication on integer geoms, not float? Change
             // the order of these?
 
+            // TODO after converting to integer, maybe run a simple algorithm that removes points
+            // which are on the line, i.e. A-B-C is straight line, so remove B. This keeps the
+            // shape the same, but could reduce the number of points, which means other algorithms
+            // will have less work to do.
+
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
-            let simplification: f64 = if metatile.zoom() == layers.global_maxzoom { pixel_size } else { 8. * pixel_size };
-            let geom = simplify_geom(geom, simplification);
 
             //println!("got some geoms {:?} minx {} miny {} maxx {} maxy {}", geom, minx, miny, maxx, maxy);
             //println!("extent {}", extent);
-            let geom: geo::Geometry<i32> = geom.map_coords(&|&(x, y)|
+            let geom: geo::Geometry<i64> = geom.map_coords(&|&(x, y)|
                 (
-                    (((x - minx) / (maxx - minx))*extent).round() as i32,
-                    (((maxy - y) / (maxy - miny))*extent).round() as i32,
+                    (((x - minx) / (maxx - minx))*extent).round() as i64,
+                    (((maxy - y) / (maxy - miny))*extent).round() as i64,
                 ));
+
+            let simplification: i64 = if metatile.zoom() == layers.global_maxzoom { 1 } else { 8 };
+            let geom = simplify_geom(geom, simplification);
+
+
+            let geom: geo::Geometry<i32> = geom.map_coords(&|&(x, y)| (x as i32, y as i32));
 
             // clip geometry
             let geom = match clip_to_bbox(Cow::Owned(geom), &geo::Bbox{ xmin: 0, xmax: extent as i32, ymin: 0, ymax: extent as i32 }) {
