@@ -406,33 +406,33 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 Ok(g) => g,
             };
 
-            // TODO would it be faster to do the simplication on integer geoms, not float? Change
-            // the order of these?
-
-            // TODO after converting to integer, maybe run a simple algorithm that removes points
-            // which are on the line, i.e. A-B-C is straight line, so remove B. This keeps the
-            // shape the same, but could reduce the number of points, which means other algorithms
-            // will have less work to do.
 
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
 
-            //println!("got some geoms {:?} minx {} miny {} maxx {} maxy {}", geom, minx, miny, maxx, maxy);
-            //println!("extent {}", extent);
+            // Convert to integer geom. MVT tiles have integers in i32, but I am getting i32
+            // overflows when simplifying, so initally convert it to i64, and then convert it back.
+            // it's a little poor since there are duplicate data.
+            // FIXME if this is a point, maybe don't do the double change.
             let geom: geo::Geometry<i64> = geom.map_coords(&|&(x, y)|
                 (
                     (((x - minx) / (maxx - minx))*extent).round() as i64,
                     (((maxy - y) / (maxy - miny))*extent).round() as i64,
                 ));
 
+            //
+
+            // TODO after converting to integer, maybe run a simple algorithm that removes points
+            // which are on the line, i.e. A-B-C is straight line, so remove B. This keeps the
+            // shape the same, but could reduce the number of points, which means other algorithms
+            // will have less work to do.
+
             let simplification: i64 = if metatile.zoom() == layers.global_maxzoom { 1 } else { 8 };
             let geom = simplify_geom(geom, simplification);
 
-
-            let geom: geo::Geometry<i32> = geom.map_coords(&|&(x, y)| (x as i32, y as i32));
-
-            // clip geometry
-            let geom = match clip_to_bbox(Cow::Owned(geom), &geo::Bbox{ xmin: 0, xmax: extent as i32, ymin: 0, ymax: extent as i32 }) {
+            // clip geometry, so no part of it goes outside the bbox. PostgreSQL will return
+            // anything that overlaps.
+            let geom = match clip_to_bbox(Cow::Owned(geom), &geo::Bbox{ xmin: 0, xmax: extent as i64, ymin: 0, ymax: extent as i64 }) {
                 None => {
                     // geometry is outside the bbox, so skip
                     continue;
@@ -484,10 +484,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 if let Some((tile, geom)) = geoms.pop() {
                     let mut geom = geom.unwrap();
 
-                    let i = (tile.x() - metatile.x()) as i32;
-                    let j = (tile.y() - metatile.y()) as i32;
+                    let i = (tile.x() - metatile.x()) as i64;
+                    let j = (tile.y() - metatile.y()) as i64;
 
-                    geom.map_coords_inplace(&|&(x, y)| ( x - (4096*i), y - (4096*j) ));
+                    // Here we convert it back to i32
+                    let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
 
                     let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                     let mvt_tile = results.get_mut(&tile).unwrap();
@@ -498,10 +499,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             if geoms.is_empty() { continue; }
             if let Some((tile, geom)) = geoms.pop() {
                 let mut geom = geom.unwrap();
-                let i = (tile.x() - metatile.x()) as i32;
-                let j = (tile.y() - metatile.y()) as i32;
+                let i = (tile.x() - metatile.x()) as i64;
+                let j = (tile.y() - metatile.y()) as i64;
 
-                geom.map_coords_inplace(&|&(x, y)| ( x - (4096*i), y - (4096*j) ));
+                // Here we convert it back to i32
+                let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
 
                 let feature = mapbox_vector_tile::Feature::new(geom, properties);
                 let mvt_tile = results.get_mut(&tile).unwrap();

@@ -315,7 +315,7 @@ pub fn clip_to_bbox<T: CoordinateType+::std::fmt::Debug>(geom: Cow<Geometry<T>>,
        .and_then(|geom| clip_to_border(Cow::Owned(geom), &Border::YMax(bbox.ymax)))
 }
 
-fn slice_box(geom: Cow<Geometry<i32>>, metatile_scale: u8, zoom: u8, tile_x0: u32, tile_y0: u32, x0: i32, y0: i32, size: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
+fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u32, tile_y0: u32, x0: i64, y0: i64, size: i64) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
     if metatile_scale == 1 {
         return vec![(slippy_map_tiles::Tile::new(zoom, tile_x0, tile_y0).unwrap(), Some(geom.into_owned()))];
     }
@@ -325,8 +325,8 @@ fn slice_box(geom: Cow<Geometry<i32>>, metatile_scale: u8, zoom: u8, tile_x0: u3
     let half = size / 2;
     let tile_half = (metatile_scale/2) as u32;
 
-    if let Some(left) = clip_to_border(Cow::Borrowed(geom.borrow()), &Border::XMax(x0+half as i32)) {
-        if let Some(topleft) = clip_to_border(Cow::Borrowed(&left), &Border::YMax(y0+half as i32)) {
+    if let Some(left) = clip_to_border(Cow::Borrowed(geom.borrow()), &Border::XMax(x0+half as i64)) {
+        if let Some(topleft) = clip_to_border(Cow::Borrowed(&left), &Border::YMax(y0+half as i64)) {
             let mut tiles = slice_box(Cow::Owned(topleft), metatile_scale/2, zoom, tile_x0, tile_y0, x0, y0, size/2);
             if metatile_scale == 2 {
                 // this is only one tile
@@ -340,7 +340,7 @@ fn slice_box(geom: Cow<Geometry<i32>>, metatile_scale: u8, zoom: u8, tile_x0: u3
             }
         }
 
-        if let Some(bottomleft) = clip_to_border(Cow::Owned(left), &Border::YMin(y0+half as i32)) {
+        if let Some(bottomleft) = clip_to_border(Cow::Owned(left), &Border::YMin(y0+half as i64)) {
             let mut tiles = slice_box(Cow::Owned(bottomleft), metatile_scale/2, zoom, tile_x0, tile_y0+tile_half, x0, y0+half, size/2);
             if metatile_scale == 2 {
                 // this is only one tile
@@ -355,8 +355,8 @@ fn slice_box(geom: Cow<Geometry<i32>>, metatile_scale: u8, zoom: u8, tile_x0: u3
         }
     }
 
-    if let Some(right) = clip_to_border(geom, &Border::XMin(x0+half as i32)) {
-        if let Some(topright) = clip_to_border(Cow::Borrowed(&right), &Border::YMax(y0+half as i32)) {
+    if let Some(right) = clip_to_border(geom, &Border::XMin(x0+half as i64)) {
+        if let Some(topright) = clip_to_border(Cow::Borrowed(&right), &Border::YMax(y0+half as i64)) {
             let mut tiles = slice_box(Cow::Owned(topright), metatile_scale/2, zoom, tile_x0+tile_half, tile_y0, x0+half, y0, size/2);
             if metatile_scale == 2 {
                 // this is only one tile
@@ -370,7 +370,7 @@ fn slice_box(geom: Cow<Geometry<i32>>, metatile_scale: u8, zoom: u8, tile_x0: u3
             }
         }
 
-        if let Some(bottomright) = clip_to_border(Cow::Owned(right), &Border::YMin(y0+half as i32)) {
+        if let Some(bottomright) = clip_to_border(Cow::Owned(right), &Border::YMin(y0+half as i64)) {
             let mut tiles = slice_box(Cow::Owned(bottomright), metatile_scale/2, zoom, tile_x0+tile_half, tile_y0+tile_half, x0+half, y0+half, size/2);
             if metatile_scale == 2 {
                 // this is only one tile
