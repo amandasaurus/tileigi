@@ -401,7 +401,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let geom: geo::Geometry<f64> = match wkb::wkb_to_geom(&mut wkb_bytes.as_slice()) {
                 Err(e) => {
                     // TODO investigate this more
-                    eprintln!("Metatile: {:?} WKB reading error {:?}, first few bytes geom: {:?}", metatile, e, &wkb_bytes[..10]);
+                    eprintln!("Metatile: {:?} WKB reading error {:?}, first few bytes geom: {:?}", metatile, e, wkb_bytes.into_iter().take(20).collect::<Vec<u8>>());
                     continue;
                 },
                 Ok(g) => g,
