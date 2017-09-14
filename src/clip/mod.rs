@@ -142,11 +142,14 @@ fn calculate_intersections<T: CoordinateType>(linestring: &LineString<T>, border
         return LineBorderIntersection::AllOutside;
     }
 
+    assert!(!all_inside && !all_outside);
+    drop(all_inside);
+    drop(all_outside);
+
     // otherwise, we need to look at the intersections
+
     // I'm not happy with this, since you need to iterate over the linestring, twice and I wish
     // there was a way to do it only once.
-
-    // FIXME little bit of code duplicating calculaing the AllInside and AllOutside
 
     #[allow(unused_assignments)]
     let mut last_inside: bool = false;
@@ -155,16 +158,11 @@ fn calculate_intersections<T: CoordinateType>(linestring: &LineString<T>, border
 
     // first point
     let point_inside = is_inside(&linestring.0[0], border);
-    all_inside &= point_inside;
-    not_all_outside |= point_inside;
     last_inside = point_inside;
     let mut last_point = &linestring.0[0];
 
     for (idx, point) in linestring.0.iter().skip(1).enumerate() {
         let point_inside = is_inside(point, border);
-
-        all_inside &= point_inside;
-        not_all_outside |= point_inside;
 
         let intersection_option = if point_inside {
             if last_inside {
@@ -196,14 +194,7 @@ fn calculate_intersections<T: CoordinateType>(linestring: &LineString<T>, border
     // just for the last point
     intersections.push(if last_inside { IntersectionOption::Inside } else { IntersectionOption::Outside });
 
-    let all_outside = ! not_all_outside;
-    if all_inside {
-        LineBorderIntersection::AllInside
-    } else if all_outside {
-        LineBorderIntersection::AllOutside
-    } else {
-        LineBorderIntersection::Intersections(intersections)
-    }
+    LineBorderIntersection::Intersections(intersections)
 }
 
 
