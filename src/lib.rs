@@ -314,10 +314,11 @@ fn simplify_geom(geom: Geometry<i64>, tolerance: i64) -> Geometry<i64> {
         Geometry::Point(p) => Geometry::Point(p),
         Geometry::MultiPoint(p) => Geometry::MultiPoint(p),
 
-        Geometry::LineString(ref p) => Geometry::LineString(p.simplify(&tolerance)),
-        Geometry::MultiLineString(ref p) => Geometry::MultiLineString(p.simplify(&tolerance)),
-        Geometry::Polygon(ref p) => Geometry::Polygon(p.simplify(&tolerance)),
-        Geometry::MultiPolygon(ref p) => Geometry::MultiPolygon(p.simplify(&tolerance)),
+        Geometry::LineString(p) => Geometry::LineString(p.simplify(&tolerance)),
+        Geometry::MultiLineString(p) => Geometry::MultiLineString(p.simplify(&tolerance)),
+        Geometry::Polygon(p) => Geometry::Polygon(p.simplify(&tolerance)),
+        Geometry::MultiPolygon(p) => Geometry::MultiPolygon(p.simplify(&tolerance)),
+
         Geometry::GeometryCollection(_) => unimplemented!(),
     }
 }
