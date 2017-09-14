@@ -198,17 +198,17 @@ fn calculate_intersections<T: CoordinateType>(linestring: &LineString<T>, border
 }
 
 
-fn clip_point_to_border<T: CoordinateType>(p: &Point<T>, border: &Border<T>) -> Option<Geometry<T>> {
-    if is_inside(p, border) {
-        Some(Geometry::Point(p.clone()))
+fn clip_point_to_border<T: CoordinateType>(p: Cow<Point<T>>, border: &Border<T>) -> Option<Geometry<T>> {
+    if is_inside(&p, border) {
+        Some(Geometry::Point(p.into_owned()))
     } else {
         None
     }
 }
 
-fn clip_linestring_to_border<T: CoordinateType>(ls: &LineString<T>, border: &Border<T>) -> Option<Geometry<T>> {
-    match calculate_intersections(ls, border) {
-        LineBorderIntersection::AllInside => Some(Geometry::LineString(ls.clone())),
+fn clip_linestring_to_border<T: CoordinateType>(ls: Cow<LineString<T>>, border: &Border<T>) -> Option<Geometry<T>> {
+    match calculate_intersections(&ls, border) {
+        LineBorderIntersection::AllInside => Some(Geometry::LineString(ls.into_owned())),
         LineBorderIntersection::AllOutside => None,
         LineBorderIntersection::Intersections(intersections) => {
             let mut lines: Vec<LineString<T>> = Vec::new();
@@ -257,8 +257,11 @@ fn clip_linestring_to_border<T: CoordinateType>(ls: &LineString<T>, border: &Bor
 }
 
 
-fn clip_multipoint_to_border<T: CoordinateType>(mp: &MultiPoint<T>, border: &Border<T>) -> Option<Geometry<T>> {
-    let points: Vec<Point<T>> = mp.0.iter().filter_map(|p| clip_point_to_border(p, border).and_then(|g| g.as_point())).collect();
+fn clip_multipoint_to_border<T: CoordinateType>(mp: Cow<MultiPoint<T>>, border: &Border<T>) -> Option<Geometry<T>> {
+    let points: Vec<Point<T>> = match mp {
+        Cow::Owned(mp) => mp.0.into_iter().filter_map(|p| clip_point_to_border(Cow::Owned(p), border).and_then(|g| g.as_point())).collect(),
+        Cow::Borrowed(mp) => mp.0.iter().filter_map(|p| clip_point_to_border(Cow::Borrowed(p), border).and_then(|g| g.as_point())).collect(),
+    };
     if points.is_empty() {
         None
     } else {
@@ -266,14 +269,28 @@ fn clip_multipoint_to_border<T: CoordinateType>(mp: &MultiPoint<T>, border: &Bor
     }
 }
 
-fn clip_multilinestring_to_border<T: CoordinateType>(mls: &MultiLineString<T>, border: &Border<T>) -> Option<Geometry<T>> {
+fn clip_multilinestring_to_border<T: CoordinateType>(mls: Cow<MultiLineString<T>>, border: &Border<T>) -> Option<Geometry<T>> {
     let mut lines: Vec<LineString<T>> = Vec::with_capacity(mls.0.len());
-    for ls in mls.0.iter() {
-        match clip_linestring_to_border(ls, border) {
-            None => {},
-            Some(Geometry::LineString(new_ls)) => { lines.push(new_ls); },
-            Some(Geometry::MultiLineString(new_mls)) => { lines.extend(new_mls); }
-            _ => { unreachable!(); },
+    match mls {
+        Cow::Borrowed(mls) => {
+            for ls in mls.0.iter() {
+                match clip_linestring_to_border(Cow::Borrowed(ls), border) {
+                    None => {},
+                    Some(Geometry::LineString(new_ls)) => { lines.push(new_ls); },
+                    Some(Geometry::MultiLineString(new_mls)) => { lines.extend(new_mls); }
+                    _ => { unreachable!(); },
+                }
+            }
+        },
+        Cow::Owned(mls) => {
+            for ls in mls.0.into_iter() {
+                match clip_linestring_to_border(Cow::Owned(ls), border) {
+                    None => {},
+                    Some(Geometry::LineString(new_ls)) => { lines.push(new_ls); },
+                    Some(Geometry::MultiLineString(new_mls)) => { lines.extend(new_mls); }
+                    _ => { unreachable!(); },
+                }
+            }
         }
     }
 
@@ -287,14 +304,30 @@ fn clip_multilinestring_to_border<T: CoordinateType>(mls: &MultiLineString<T>, b
 /// Clip a geometry to a border. None iff the geometry is entirely outside it, otherwise Some(g)
 /// with the new geometry clipped to that border.
 fn clip_to_border<T: CoordinateType>(geom: Cow<Geometry<T>>, border: &Border<T>) -> Option<Geometry<T>> {
-    match *geom {
-        Geometry::Point(ref p) => clip_point_to_border(p, border),
-        Geometry::LineString(ref ls) => clip_linestring_to_border(ls, border),
-        Geometry::Polygon(ref p) => sutherland_hodgeman::clip_polygon_to_border(p, border).map(Geometry::Polygon),
-        Geometry::MultiPoint(ref mp) => clip_multipoint_to_border(mp, border),
-        Geometry::MultiLineString(ref mls) => clip_multilinestring_to_border(mls, border),
-        Geometry::MultiPolygon(ref p) => sutherland_hodgeman::clip_multipolygon_to_border(p, border).map(Geometry::MultiPolygon),
-        Geometry::GeometryCollection(_) => unimplemented!(),
+    match geom {
+        Cow::Owned(geom) => {
+            match geom {
+                Geometry::Point(p) => clip_point_to_border(Cow::Owned(p), border),
+                Geometry::LineString(ls) => clip_linestring_to_border(Cow::Owned(ls), border),
+                Geometry::Polygon(p) => sutherland_hodgeman::clip_polygon_to_border(&p, border).map(Geometry::Polygon),
+                Geometry::MultiPoint(mp) => clip_multipoint_to_border(Cow::Owned(mp), border),
+                Geometry::MultiLineString(mls) => clip_multilinestring_to_border(Cow::Owned(mls), border),
+                Geometry::MultiPolygon(p) => sutherland_hodgeman::clip_multipolygon_to_border(&p, border).map(Geometry::MultiPolygon),
+                Geometry::GeometryCollection(_) => unimplemented!(),
+            }
+        },
+        Cow::Borrowed(geom) => {
+            match *geom {
+                Geometry::Point(ref p) => clip_point_to_border(Cow::Borrowed(p), border),
+                Geometry::LineString(ref ls) => clip_linestring_to_border(Cow::Borrowed(ls), border),
+                Geometry::Polygon(ref p) => sutherland_hodgeman::clip_polygon_to_border(&p, border).map(Geometry::Polygon),
+
+                Geometry::MultiPoint(ref mp) => clip_multipoint_to_border(Cow::Borrowed(mp), border),
+                Geometry::MultiLineString(ref mls) => clip_multilinestring_to_border(Cow::Borrowed(mls), border),
+                Geometry::MultiPolygon(ref p) => sutherland_hodgeman::clip_multipolygon_to_border(&p, border).map(Geometry::MultiPolygon),
+                Geometry::GeometryCollection(_) => unimplemented!(),
+            }
+        }
     }
 }
 
