@@ -29,6 +29,7 @@ fn main() {
         .arg(Arg::with_name("bbox").long("bbox").default_value("90,-180,-90,180"))
         .arg(Arg::with_name("if_not_exists").long("if-not-exists"))
         .arg(Arg::with_name("no_compress").long("no-compress"))
+        .arg(Arg::with_name("metatile-scale").long("metatile-scale").default_value("8"))
         .get_matches();
 
     let data_yml = matches.value_of("data_yml").unwrap();
@@ -37,12 +38,13 @@ fn main() {
     let maxzoom: u8 = matches.value_of("maxzoom").unwrap().parse().unwrap();
     let if_not_exists = matches.is_present("if_not_exists");
     let compress = ! matches.is_present("no_compress");
+    let metatile_scale: u8 = matches.value_of("metatile-scale").unwrap().parse().unwrap();
 
     let bbox = BBox::new_from_string(matches.value_of("bbox").expect("bbox not provided")).expect("Invalid bbox");
 
     let start = Instant::now();
 
-    generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest_dir, if_not_exists, compress);
+    generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest_dir, if_not_exists, compress, metatile_scale);
 
     println!("Finished in {}", fmt_duration(&start.elapsed()));
 
