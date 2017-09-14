@@ -344,7 +344,7 @@ fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u3
         return vec![(slippy_map_tiles::Tile::new(zoom, tile_x0, tile_y0).unwrap(), Some(geom.into_owned()))];
     }
 
-    let mut results = Vec::with_capacity((metatile_scale*metatile_scale) as usize);
+    let mut results = Vec::new();
 
     let half = size / 2;
     let tile_half = (metatile_scale/2) as u32;
