@@ -385,11 +385,9 @@ fn slice_box(geom: Cow<Geometry<i32>>, metatile_scale: u8, zoom: u8, tile_x0: u3
         }
     }
 
-
-
     results
 }
 
-pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Cow<Geometry<i32>>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
-    slice_box(geom, metatile.scale(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i32*4096)
+pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Cow<Geometry<i64>>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+    slice_box(geom, metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096)
 }

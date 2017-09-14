@@ -179,11 +179,10 @@ fn scale_denominator_for_zoom(zoom: u8) -> &'static str {
     }
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool, compress: bool) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool, compress: bool, metatile_scale: u8) {
     let layers = Layers::from_file(filename);
     let dest_dir = Path::new(dest_dir);
     fs::create_dir_all(dest_dir).unwrap();
-    let metatile_scale = 8;
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
 
