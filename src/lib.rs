@@ -477,7 +477,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             //
             // We want to do this in order, so we reverse the vec, and the pop from the end
             // (which is the original front).
-            let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, Cow::Owned(geom)).into_iter().filter(|&(t, ref g)| g.is_some()).collect();
+            let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom).into_iter().filter(|&(t, ref g)| g.is_some()).collect();
             geoms.reverse();
 
             loop {

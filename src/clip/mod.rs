@@ -10,6 +10,7 @@ use slippy_map_tiles::{BBox, Metatile, MetatilesIterator};
 use geo::*;
 use geo::algorithm::simplify::Simplify;
 use geo::algorithm::map_coords::MapCoords;
+use geo::algorithm::map_coords::MapCoordsInplace;
 use geo::algorithm::boundingbox::BoundingBox;
 use geo::algorithm::contains::Contains;
 
@@ -412,7 +413,49 @@ fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u3
     results
 }
 
-pub fn clip_point_to_tiles(metatile: &Metatile, point: Cow<Point<i64>>, buffer: u32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+fn all_points_in_one_tile(metatile: &Metatile, ls: &LineString<i64>, buffer: u32) -> Option<(u32, u32)> {
+    assert_eq!(buffer, 0);
+
+    let initial_tile_x = ls.0[0].x() / 4096;
+    let initial_tile_y = ls.0[0].y() / 4096;
+
+    if ls.0.iter().skip(1).all(|&p| (p.x() / 4096 == initial_tile_x && p.y() /4096 == initial_tile_y)) {
+        Some((initial_tile_x as u32, initial_tile_y as u32))
+    } else {
+        None
+    }
+}
+
+pub fn clip_linestring_to_tiles(metatile: &Metatile, mut ls: LineString<i64>, buffer: u32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+    assert_eq!(buffer, 0);
+    // Are all the points in the linestring in the same tile? If so, we can skip a lot of steps
+    // FIXME this is not buffer aware.
+    let size = metatile.size() as u32;
+
+    let single_tile = all_points_in_one_tile(metatile, &ls, buffer);
+
+    match single_tile {
+        None => {
+            // Not all on one tile, so usual approach
+            slice_box(Cow::Owned(Geometry::LineString(ls)), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096)
+        },
+        Some((tile_x, tile_y)) => {
+            if tile_x < size && tile_y < size {
+                let x0 = (tile_x * 4096) as i64;
+                let y0 = (tile_y * 4096) as i64;
+                ls.map_coords_inplace(&|&(x, y)| ( (x - x0), (y - y0) ));
+                vec![(slippy_map_tiles::Tile::new(metatile.zoom(), (tile_x as u32)+metatile.x(), (tile_y as u32)+metatile.y()).unwrap(), Some(Geometry::LineString(ls)))]
+            } else {
+                // Dunno why
+                // FIXME why is this needed
+                slice_box(Cow::Owned(Geometry::LineString(ls)), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096)
+            }
+        },
+    }
+    
+}
+
+pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i64>, buffer: u32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
     //fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u32, tile_y0: u32, x0: i64, y0: i64, size: i64) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
     let metatile_scale = metatile.size() as u32;
 
@@ -434,10 +477,11 @@ pub fn clip_point_to_tiles(metatile: &Metatile, point: Cow<Point<i64>>, buffer: 
     }
 }
 
-pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Cow<Geometry<i64>>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i64>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+    // FIXME support buffer
     match geom {
-        Cow::Owned(Geometry::Point(p)) => clip_point_to_tiles(metatile, Cow::Owned(p), 0),
-        Cow::Borrowed(&Geometry::Point(ref p)) => clip_point_to_tiles(metatile, Cow::Borrowed(p), 0),
-        _ => slice_box(geom, metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096),
+        Geometry::Point(p) => clip_point_to_tiles(metatile, p, 0),
+        Geometry::LineString(ls) => clip_linestring_to_tiles(metatile, ls, 0),
+        _ => slice_box(Cow::Owned(geom), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096),
     }
 }
