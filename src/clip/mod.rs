@@ -412,6 +412,32 @@ fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u3
     results
 }
 
+pub fn clip_point_to_tiles(metatile: &Metatile, point: Cow<Point<i64>>, buffer: u32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+    //fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u32, tile_y0: u32, x0: i64, y0: i64, size: i64) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+    let metatile_scale = metatile.size() as u32;
+
+    let x = point.x();
+    let y = point.x();
+
+    let tile_x = (x / 4096) as u32 + metatile.x();
+    let tile_y = (y / 4096) as u32 + metatile.y();
+
+    let tile_x_offset = x % 4096;
+    let tile_y_offset = y % 4096;
+
+    // FIXME support buffer
+
+    if tile_x > 0 && tile_y > 0 && tile_x < metatile_scale && tile_y < metatile_scale {
+        vec![(slippy_map_tiles::Tile::new(metatile.zoom(), tile_x, tile_y).unwrap(), Some(Geometry::Point(Point::new(tile_x_offset, tile_y_offset))))]
+    } else {
+        vec![]
+    }
+}
+
 pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Cow<Geometry<i64>>) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
-    slice_box(geom, metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096)
+    match geom {
+        Cow::Owned(Geometry::Point(p)) => clip_point_to_tiles(metatile, Cow::Owned(p), 0),
+        Cow::Borrowed(&Geometry::Point(ref p)) => clip_point_to_tiles(metatile, Cow::Borrowed(p), 0),
+        _ => slice_box(geom, metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096),
+    }
 }
