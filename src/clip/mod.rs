@@ -309,10 +309,10 @@ fn clip_to_border<T: CoordinateType>(geom: Cow<Geometry<T>>, border: &Border<T>)
             match geom {
                 Geometry::Point(p) => clip_point_to_border(Cow::Owned(p), border),
                 Geometry::LineString(ls) => clip_linestring_to_border(Cow::Owned(ls), border),
-                Geometry::Polygon(p) => sutherland_hodgeman::clip_polygon_to_border(&p, border).map(Geometry::Polygon),
+                Geometry::Polygon(p) => sutherland_hodgeman::clip_polygon_to_border(Cow::Owned(p), border).map(Geometry::Polygon),
                 Geometry::MultiPoint(mp) => clip_multipoint_to_border(Cow::Owned(mp), border),
                 Geometry::MultiLineString(mls) => clip_multilinestring_to_border(Cow::Owned(mls), border),
-                Geometry::MultiPolygon(p) => sutherland_hodgeman::clip_multipolygon_to_border(&p, border).map(Geometry::MultiPolygon),
+                Geometry::MultiPolygon(p) => sutherland_hodgeman::clip_multipolygon_to_border(Cow::Owned(p), border).map(Geometry::MultiPolygon),
                 Geometry::GeometryCollection(_) => unimplemented!(),
             }
         },
@@ -320,11 +320,11 @@ fn clip_to_border<T: CoordinateType>(geom: Cow<Geometry<T>>, border: &Border<T>)
             match *geom {
                 Geometry::Point(ref p) => clip_point_to_border(Cow::Borrowed(p), border),
                 Geometry::LineString(ref ls) => clip_linestring_to_border(Cow::Borrowed(ls), border),
-                Geometry::Polygon(ref p) => sutherland_hodgeman::clip_polygon_to_border(&p, border).map(Geometry::Polygon),
+                Geometry::Polygon(ref p) => sutherland_hodgeman::clip_polygon_to_border(Cow::Borrowed(p), border).map(Geometry::Polygon),
 
                 Geometry::MultiPoint(ref mp) => clip_multipoint_to_border(Cow::Borrowed(mp), border),
                 Geometry::MultiLineString(ref mls) => clip_multilinestring_to_border(Cow::Borrowed(mls), border),
-                Geometry::MultiPolygon(ref p) => sutherland_hodgeman::clip_multipolygon_to_border(&p, border).map(Geometry::MultiPolygon),
+                Geometry::MultiPolygon(ref p) => sutherland_hodgeman::clip_multipolygon_to_border(Cow::Borrowed(p), border).map(Geometry::MultiPolygon),
                 Geometry::GeometryCollection(_) => unimplemented!(),
             }
         }

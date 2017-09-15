@@ -3,44 +3,8 @@ use super::*;
 
 use std::fmt::Debug;
 
-fn intersection<T: CoordinateType>(p1: &Point<T>, p2: &Point<T>, border: &Border<T>) -> Point<T> {
-    let x1 = p1.x();
-    let y1 = p1.y();
-    let x2 = p2.x();
-    let y2 = p2.y();
 
-    // The algorithms are rearranged to reduce the risk of an i32 integer overflow
-    match *border {
-        Border::XMin(xmin) => {
-            let x = xmin;
-            //println!("p1 {:?} p1 {:?} border {:?}", p1, p2, border);
-            assert!(x1 != x2);
-            let y = ((y2-y1)/(x2 - x1))*(x - x1) + y1;
-            Point::new(x, y)
-        },
-        Border::XMax(xmax) => {
-            let x = xmax;
-            assert!(x1 != x2);
-            let y = ((y2-y1)/(x2-x1))*(x - x1) + y1;
-            Point::new(x, y)
-        },
-        Border::YMin(ymin) => {
-            let y = ymin;
-            assert!(y1 != y2);
-            let x = ((x2-x1)/(y2-y1))*(y - y1) + x1;
-            Point::new(x, y)
-        },
-        Border::YMax(ymax) => {
-            let y = ymax;
-            assert!(y1 != y2);
-            let x = ((x2-x1)/(y2-y1))*(y - y1) + x1;
-            Point::new(x, y)
-        },
-    }
-}
-
-
-fn clip_ring_to_border<T: CoordinateType>(ring: &LineString<T>, border: &Border<T>) -> Option<LineString<T>> {
+fn clip_ring_to_border<T: CoordinateType>(ring: Cow<LineString<T>>, border: &Border<T>) -> Option<LineString<T>> {
     //println!("\n\n\nBorder: {:?} Rings: {:?}", border, ring);
 
     // in our rings, the last point is the same as the first point, and this algorithm doesn't
@@ -53,6 +17,31 @@ fn clip_ring_to_border<T: CoordinateType>(ring: &LineString<T>, border: &Border<
         return None;
     }
     assert!(ring.0.len() >= 3);
+
+    // First we look if everything is all inside or all outside, and early return then, Then we
+    // don't have to allocate a vec for the intersections
+    let mut all_inside = true;
+    let mut not_all_outside = false;
+
+    let point_inside = is_inside(&ring.0[0], border);
+    all_inside &= point_inside;
+    not_all_outside |= point_inside;
+
+    for (idx, point) in ring.0.iter().skip(1).enumerate() {
+        let point_inside = is_inside(point, border);
+
+        all_inside &= point_inside;
+        not_all_outside |= point_inside;
+    }
+
+    let all_outside = ! not_all_outside;
+    if all_inside {
+        return Some(ring.into_owned());
+    } else if all_outside {
+        return None;
+    }
+
+    // No, we need to do some clipping
 
     let mut new_points = Vec::with_capacity(ring.0.len());
 
@@ -68,10 +57,10 @@ fn clip_ring_to_border<T: CoordinateType>(ring: &LineString<T>, border: &Border<
         if is_inside(&p1, border) {
             new_points.push(p1);
             if ! is_inside(&p2, border) {
-                new_points.push(intersection(&p1, &p2, border));
+                new_points.push(intersection(&p1, &p2, border).into());
             }
         } else if is_inside(&p2, border) {
-            new_points.push(intersection(&p1, &p2, border));
+            new_points.push(intersection(&p1, &p2, border).into());
         }
         //println!("all points {:?}", new_points);
     }
@@ -86,20 +75,39 @@ fn clip_ring_to_border<T: CoordinateType>(ring: &LineString<T>, border: &Border<
 
 }
 
-pub fn clip_polygon_to_border<T: CoordinateType>(poly: &Polygon<T>, border: &Border<T>) -> Option<Polygon<T>> {
+pub fn clip_polygon_to_border<T: CoordinateType>(poly: Cow<Polygon<T>>, border: &Border<T>) -> Option<Polygon<T>> {
 
-    let new_exterior = clip_ring_to_border(&poly.exterior, border);
-    if let Some(new_exterior) = new_exterior {
-        let interiors: Vec<_> = poly.interiors.iter().filter_map(|i| clip_ring_to_border(i, border)).collect();
-        Some(Polygon::new(new_exterior, interiors))
-    } else {
-        // if the exterior ring is totally outside, then don't bother any more
-        None
+    match poly {
+        Cow::Owned(poly) => {
+            let Polygon{ exterior, interiors } = poly;
+            let new_exterior = clip_ring_to_border(Cow::Owned(exterior), border);
+            if let Some(new_exterior) = new_exterior {
+                let interiors: Vec<_> = interiors.into_iter().filter_map(|i| clip_ring_to_border(Cow::Owned(i), border)).collect();
+                Some(Polygon::new(new_exterior, interiors))
+            } else {
+                // if the exterior ring is totally outside, then don't bother any more
+                None
+            }
+        },
+        Cow::Borrowed(poly) => {
+            let new_exterior = clip_ring_to_border(Cow::Borrowed(&poly.exterior), border);
+            if let Some(new_exterior) = new_exterior {
+                let interiors: Vec<_> = poly.interiors.iter().filter_map(|i| clip_ring_to_border(Cow::Borrowed(i), border)).collect();
+                Some(Polygon::new(new_exterior, interiors))
+            } else {
+                // if the exterior ring is totally outside, then don't bother any more
+                None
+            }
+        },
     }
 }
 
-pub fn clip_multipolygon_to_border<T: CoordinateType>(mp: &MultiPolygon<T>, border: &Border<T>) -> Option<MultiPolygon<T>> {
-    let polys: Vec<_> = mp.0.iter().filter_map(|p| clip_polygon_to_border(p, border)).collect();
+pub fn clip_multipolygon_to_border<T: CoordinateType>(mp: Cow<MultiPolygon<T>>, border: &Border<T>) -> Option<MultiPolygon<T>> {
+    let polys: Vec<_> = match mp {
+        Cow::Owned(mp) => mp.0.into_iter().filter_map(|p| clip_polygon_to_border(Cow::Owned(p), border)).collect(),
+        Cow::Borrowed(mp) => mp.0.iter().filter_map(|p| clip_polygon_to_border(Cow::Borrowed(p), border)).collect(),
+    };
+
     if polys.len() == 0 {
         None
     } else {
@@ -107,15 +115,19 @@ pub fn clip_multipolygon_to_border<T: CoordinateType>(mp: &MultiPolygon<T>, bord
     }
 }
 
-pub fn clip_polygon_to_bbox<T: CoordinateType>(poly: &Polygon<T>, bbox: &Bbox<T>) -> Option<Polygon<T>> {
+pub fn clip_polygon_to_bbox<T: CoordinateType>(poly: Cow<Polygon<T>>, bbox: &Bbox<T>) -> Option<Polygon<T>> {
     clip_polygon_to_border(poly, &Border::XMin(bbox.xmin))
-           .and_then(|p| clip_polygon_to_border(&p, &Border::XMax(bbox.xmax)))
-           .and_then(|p| clip_polygon_to_border(&p, &Border::YMin(bbox.ymin)))
-           .and_then(|p| clip_polygon_to_border(&p, &Border::YMax(bbox.ymax)))
+           .and_then(|p| clip_polygon_to_border(Cow::Owned(p), &Border::XMax(bbox.xmax)))
+           .and_then(|p| clip_polygon_to_border(Cow::Owned(p), &Border::YMin(bbox.ymin)))
+           .and_then(|p| clip_polygon_to_border(Cow::Owned(p), &Border::YMax(bbox.ymax)))
 }
 
-pub fn clip_multipolygon_to_bbox<T: CoordinateType>(mp: &MultiPolygon<T>, bbox: &Bbox<T>) -> Option<MultiPolygon<T>> {
-    let polys: Vec<_> = mp.0.iter().filter_map(|p| clip_polygon_to_bbox(p, bbox)).collect();
+pub fn clip_multipolygon_to_bbox<T: CoordinateType>(mp: Cow<MultiPolygon<T>>, bbox: &Bbox<T>) -> Option<MultiPolygon<T>> {
+    let polys: Vec<_> = match mp {
+        Cow::Owned(mp) => mp.0.into_iter().filter_map(|p| clip_polygon_to_bbox(Cow::Owned(p), bbox)).collect(),
+        Cow::Borrowed(mp) => mp.0.iter().filter_map(|p| clip_polygon_to_bbox(Cow::Borrowed(p), bbox)).collect(),
+    };
+
     if polys.len() == 0 {
         None
     } else {
@@ -126,15 +138,6 @@ pub fn clip_multipolygon_to_bbox<T: CoordinateType>(mp: &MultiPolygon<T>, bbox: 
 
 mod test {
     use super::*;
-
-    #[test]
-    fn test_intersection() {
-        assert_eq!(intersection(&Point::new(0, 0), &Point::new(10, 0), &Border::XMax(5)), Point::new(5, 0));
-        assert_eq!(intersection(&Point::new(0, 0), &Point::new(10, 0), &Border::XMin(5)), Point::new(5, 0));
-
-        assert_eq!(intersection(&Point::new(0, 0), &Point::new(0, 10), &Border::YMax(5)), Point::new(0, 5));
-        assert_eq!(intersection(&Point::new(0, 0), &Point::new(0, 10), &Border::YMin(5)), Point::new(0, 5));
-    }
 
     #[test]
     fn border_clip_simple_no_cut() {
