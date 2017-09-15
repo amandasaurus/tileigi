@@ -195,7 +195,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
     for metatile in MetatilesIterator::new_for_bbox_zoom(metatile_scale, bbox, min_zoom, max_zoom) {
         if metatile.zoom() < min_zoom { continue; }
 
-        if num_tiles_done % 64 == 0 && num_tiles_done > 0 {
+        if num_tiles_done % 1024 == 0 && num_tiles_done > 0 {
             if let Some(t) = started_current_zoom {
                 let duration = duration_to_float_secs(&t.elapsed());
                 println!("    Zoom {:2}, done {:4} metatiles, ({:9.4} metatiles/sec, {:9.4} tiles/sec)", last_zoom, num_tiles_done, (num_tiles_done as f64)/duration, (num_tiles_done*(metatile_scale as u64)) as f64/duration );
