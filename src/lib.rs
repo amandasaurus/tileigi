@@ -68,9 +68,17 @@ impl ConnectionPool {
 }
 
 pub struct Layers {
-    layers: Vec<Yaml>,
+    layers: Vec<Layer>,
     global_maxzoom: u8,
     global_minzoom: u8,
+}
+
+struct Layer {
+    minzoom: u8,
+    maxzoom: u8,
+    id: String,
+    table: String,
+    dbname: Option<String>,
 }
 
 impl Layers {
@@ -90,7 +98,7 @@ impl Layers {
         let layers = data_yml.as_hash().unwrap().clone().remove(&Yaml::String("Layer".to_string())).unwrap();
         let layers = layers.as_vec().unwrap();
 
-        let layers: Vec<_> = layers.into_iter().filter(
+        let layers: Vec<Layer> = layers.into_iter().filter(
             |l| l["Datasource"]
                 .as_hash()
                 .and_then(
@@ -99,6 +107,13 @@ impl Layers {
                 )
                 .unwrap_or(false)
             )
+            .map(|layer| Layer{
+                id: layer["id"].as_str().unwrap().to_owned(),
+                dbname: layer["Datasource"]["dbname"].as_str().map(|x| x.to_owned()),
+                minzoom: layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(global_minzoom) as u8,
+                maxzoom: layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(global_maxzoom) as u8,
+                table: layer["Datasource"]["table"].as_str().unwrap().to_owned(),
+            })
             // FIXME finish this thing
             //.map(|layer| {
             //    layer["Datasource"]["table"].as_str().unwrap()
@@ -107,7 +122,7 @@ impl Layers {
             //        .replace("!scale_denominator!", "$4");
             //    layer
             //})
-            .cloned().collect();
+            .collect();
 
         Layers{ layers: layers, global_minzoom: global_minzoom, global_maxzoom: global_maxzoom }
 
@@ -119,8 +134,8 @@ impl Layers {
 
             let mut conn_params = postgres::params::Builder::new();
             // TODO do others
-            if let Some(dbname) = layer["Datasource"]["dbname"].as_str() {
-                conn_params.database(dbname);
+            if let Some(ref dbname) = layer.dbname {
+                conn_params.database(&dbname);
             }
 
             // TODO fix user
@@ -132,7 +147,7 @@ impl Layers {
                 conns.insert(conn_params.clone(), Vec::new());
             }
 
-            let layer_id: String = layer["id"].as_str().unwrap().to_string();
+            let layer_id: String = layer.id.clone();
             conns.get_mut(&conn_params).unwrap().push(layer_id);
             
         }
@@ -245,10 +260,10 @@ fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &Path
         "maxzoom": 14,
         "format": "pbf",
         "vector_layers": layers.layers.iter().map(|layer| {
-            let layer_name = layer["id"].as_str().unwrap().clone();
+            let layer_name = &layer.id;
             let columns = columns_for_layer(layer, connection_pool);
-            let minzoom = layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(layers.global_minzoom) as u8;
-            let maxzoom = layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(layers.global_maxzoom) as u8;
+            let minzoom = layer.maxzoom;
+            let maxzoom = layer.maxzoom;
             let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
             json!({
                 "id": layer_name,
@@ -265,12 +280,12 @@ fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &Path
     
 }
 
-fn columns_for_layer(layer: &Yaml, connection_pool: &ConnectionPool) -> Vec<(String, String)> {
-    let layer_name = layer["id"].as_str().unwrap().clone();
+fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(String, String)> {
+    let layer_name = &layer.id;
 
-    let conn = connection_pool.connection_for_layer(layer_name);
+    let conn = connection_pool.connection_for_layer(&layer_name);
     
-    let table = layer["Datasource"]["table"].as_str().unwrap();
+    let table = &layer.table;
     let table = table
         .replace("!pixel_width!", "0").replace("!pixel_height!","0")
         .replace("!bbox!", "ST_Point(0, 0)")
@@ -332,8 +347,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
     let mut results: HashMap<slippy_map_tiles::Tile, mapbox_vector_tile::Tile> = metatile.tiles().into_iter().map(|t| (t, empty_tile.clone())).collect();
 
     for layer in layers.layers.iter() {
-        let minzoom = layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(layers.global_minzoom) as u8;
-        let maxzoom = layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(layers.global_maxzoom) as u8;
+        let minzoom = layer.minzoom;
+        let maxzoom = layer.maxzoom;
         let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
 
         // Skip layers which are not on this zoom
@@ -341,12 +356,12 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             continue;
         }
 
-        let layer_name = layer["id"].as_str().unwrap().clone();
+        let layer_name = &layer.id;
         //println!("layer_name {}", layer_name);
 
-        let conn = connection_pool.connection_for_layer(layer_name);
+        let conn = connection_pool.connection_for_layer(&layer_name);
         
-        let table = layer["Datasource"]["table"].as_str().unwrap();
+        let table = &layer.table;
         // FIXME should this be 4096??
         // FIXME not confident about this calculation.
         let canvas_size = 256.*(metatile.size() as f64);
@@ -493,7 +508,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                     let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                     let mvt_tile = results.get_mut(&tile).unwrap();
-                    mvt_tile.add_feature(layer_name, feature);
+                    mvt_tile.add_feature(&layer_name, feature);
                 }
             }
 
@@ -507,8 +522,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
 
                 let feature = mapbox_vector_tile::Feature::new(geom, properties);
+                //println!("Here's the tile {:?} and here's the keys {:?}", tile, results.keys().collect::<Vec<_>>());
                 let mvt_tile = results.get_mut(&tile).unwrap();
-                mvt_tile.add_feature(layer_name, feature);
+                mvt_tile.add_feature(&layer_name, feature);
             }
 
         }
