@@ -441,9 +441,6 @@ pub fn clip_linestring_to_tiles(metatile: &Metatile, mut ls: LineString<i64>, bu
         },
         Some((tile_x, tile_y)) => {
             if tile_x < size && tile_y < size {
-                let x0 = (tile_x * 4096) as i64;
-                let y0 = (tile_y * 4096) as i64;
-                ls.map_coords_inplace(&|&(x, y)| ( (x - x0), (y - y0) ));
                 vec![(slippy_map_tiles::Tile::new(metatile.zoom(), (tile_x as u32)+metatile.x(), (tile_y as u32)+metatile.y()).unwrap(), Some(Geometry::LineString(ls)))]
             } else {
                 // Dunno why
