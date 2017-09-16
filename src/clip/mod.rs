@@ -453,7 +453,6 @@ pub fn clip_linestring_to_tiles(metatile: &Metatile, mut ls: LineString<i64>, bu
 }
 
 pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i64>, buffer: u32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
-    //fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u32, tile_y0: u32, x0: i64, y0: i64, size: i64) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
     let metatile_scale = metatile.size() as u32;
 
     let x = point.x();
