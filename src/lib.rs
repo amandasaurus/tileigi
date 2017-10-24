@@ -447,13 +447,17 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // overflows when simplifying, so initally convert it to i64, and then convert it back.
             // it's a little poor since there are duplicate data.
             // FIXME if this is a point, maybe don't do the double change.
-            let geom: geo::Geometry<i64> = geom.map_coords(&|&(x, y)|
+            let mut geom: geo::Geometry<i64> = geom.map_coords(&|&(x, y)|
                 (
                     (((x - minx) / (maxx - minx))*extent).round() as i64,
                     (((maxy - y) / (maxy - miny))*extent).round() as i64,
                 ));
 
-            //if problem_obj { println!("geom {:?}", geom); }
+            validity::remove_duplicate_points(&mut geom);
+            let geom = geom;
+            if ! is_valid(&geom) {
+                continue;
+            }
 
             //if problem_obj { println!("geom {:?}", geom); }
 
