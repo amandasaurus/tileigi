@@ -209,13 +209,16 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
 
     let mut last_zoom = 255;
     let mut num_tiles_done: u64 = 0;
+    let logging_freq: u32 = 8;
+    let log_every: u64 = 2u64.pow(logging_freq);
+    let mask: u64 = (1u64<<logging_freq) - 1;
     for metatile in MetatilesIterator::new_for_bbox_zoom(metatile_scale, bbox, min_zoom, max_zoom) {
         if metatile.zoom() < min_zoom { continue; }
 
-        if num_tiles_done % 64 == 0 && num_tiles_done > 0 {
+        if num_tiles_done & mask == 0 && num_tiles_done > 0 {
             if let Some(t) = started_current_zoom {
                 let duration = duration_to_float_secs(&t.elapsed());
-                println!("    Zoom {:2}, done {:4} metatiles, ({:9.4} metatiles/sec, {:9.4} tiles/sec)", last_zoom, num_tiles_done, (num_tiles_done as f64)/duration, (num_tiles_done*(metatile_scale as u64)) as f64/duration );
+                println!("    Zoom {:2}, done {:4} ({:3}*{}) metatiles in {:>8} ({:9.4} metatiles/sec, {:9.4} tiles/sec)", last_zoom, num_tiles_done, num_tiles_done>>logging_freq, log_every, fmt_duration(&t.elapsed()), (num_tiles_done as f64)/duration, (num_tiles_done*(metatile_scale as u64)) as f64/duration );
             }
         }
         if metatile.zoom() != last_zoom {
