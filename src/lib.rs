@@ -233,7 +233,6 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
         if metatile.zoom() > max_zoom {
             break;
         }
-        //println!("metatile {:?}", metatile);
 
 
         let tiles = single_metatile(&layers, &metatile, &connection_pool);
@@ -346,11 +345,9 @@ fn simplify_geom(geom: Geometry<i64>, tolerance: i64) -> Geometry<i64> {
 
 
 pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool) -> Vec<(slippy_map_tiles::Tile, mapbox_vector_tile::Tile)> {
-    //println!("Metatile {:?}", metatile);
     let empty_tile = mapbox_vector_tile::Tile::new();
     let scale = metatile.size() as u32;
 
-    //let mut results: HashMap<slippy_map_tiles::Tile, mapbox_vector_tile::Tile> = metatile.tiles().into_iter().map(|t| (t, empty_tile.clone())).collect();
     let mut results: Vec<mapbox_vector_tile::Tile> = vec![empty_tile; (scale*scale) as usize];
 
     for layer in layers.layers.iter() {
@@ -364,7 +361,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         }
 
         let layer_name = &layer.id;
-        //println!("layer_name {}", layer_name);
 
         let conn = connection_pool.connection_for_layer(&layer_name);
         
@@ -414,21 +410,12 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         let columns: Vec<_> = res.columns().iter().skip(1).filter(|c| c.name() != "way").collect();
 
         let mut res = res.iter().enumerate();
-        // 9_541 good
-        // 9_542 bad
-        //let mut res = res.take(9_542);
 
-        //println!("metatile {:?}", metatile);
         for (i, row) in res {
-            //if layer_name != "roads-low-zoom" { continue; }
-            //let problem_obj = layer_name == "roads-low-zoom" && i == 9_412 && metatile.zoom() == 5;
-            //if problem_obj { println!("problem obj"); }
-            //if problem_obj { println!("metatile {:?}", metatile); }
 
             // First object is the ST_AsBinary
             // TODO Does this do any copies that we don't want?
             let wkb_bytes: Vec<u8> = row.get(0);
-            //println!("wkb_bytes {:?}", wkb_bytes);
 
             let geom: geo::Geometry<f64> = match wkb::wkb_to_geom(&mut wkb_bytes.as_slice()) {
                 Err(e) => {
@@ -459,7 +446,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 continue;
             }
 
-            //if problem_obj { println!("geom {:?}", geom); }
 
             // TODO after converting to integer, maybe run a simple algorithm that removes points
             // which are on the line, i.e. A-B-C is straight line, so remove B. This keeps the
@@ -469,7 +455,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let simplification: i64 = if metatile.zoom() == layers.global_maxzoom { 1 } else { 8 };
             let geom = simplify_geom(geom, simplification);
 
-            //if problem_obj { println!("geom post-simplification {:?}", geom); }
 
             if ! is_valid(&geom) {
                 continue;
@@ -522,7 +507,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // We want to do this in order, so we reverse the vec, and the pop from the end
             // (which is the original front).
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom).into_iter().filter(|&(t, ref g)| g.is_some()).collect();
-            //if problem_obj { println!("geoms post-clipping to tiles {:?}", geoms); }
             geoms.reverse();
 
             loop {
@@ -535,14 +519,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                     // Here we convert it back to i32
                     let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
-                    //if problem_obj { println!("geom as i32 {:?}", geom); }
 
                     let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                     let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
                     let mvt_tile = results.get_mut(i).unwrap();
-                    //if problem_obj { println!("feature {:?}", feature); }
                     mvt_tile.add_feature(&layer_name, feature);
-                    //if problem_obj { println!("mvt_tile {:?}", mvt_tile); }
                 }
             }
 
@@ -554,14 +535,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                 // Here we convert it back to i32
                 let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
-                //if problem_obj { println!("geom as i32 {:?}", geom); }
 
                 let feature = mapbox_vector_tile::Feature::new(geom, properties);
                 let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
                 let mvt_tile = results.get_mut(i).unwrap();
-                //if problem_obj { println!("feature {:?}", feature); }
                 mvt_tile.add_feature(&layer_name, feature);
-                //if problem_obj { println!("mvt_tile {:?}", mvt_tile); }
             }
 
         }
@@ -573,7 +551,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         let i = i as u32;
         let x = i / scale + metatile.x();
         let y = i % scale + metatile.y();
-        //println!("i {} x {} y {} zoom {}", i, x, y, metatile.zoom());
         (slippy_map_tiles::Tile::new(metatile.zoom(), x, y).unwrap(), mvt_tile)
     }).collect()
 
