@@ -214,7 +214,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
 
     let mut last_zoom = 255;
     let mut num_tiles_done: u64 = 0;
-    let logging_freq: u32 = 8;
+    let logging_freq: u32 = 2;
     let log_every: u64 = 2u64.pow(logging_freq);
     let mask: u64 = (1u64<<logging_freq) - 1;
     for metatile in MetatilesIterator::new_for_bbox_zoom(metatile_scale, bbox, min_zoom, max_zoom) {
