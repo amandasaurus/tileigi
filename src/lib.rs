@@ -9,6 +9,8 @@ extern crate geo;
 #[macro_use]
 extern crate serde_json;
 
+extern crate users;
+
 use std::fs::File;
 use std::fs;
 use std::io::prelude::*;
@@ -142,8 +144,9 @@ impl Layers {
                 conn_params.database(&dbname);
             }
 
-            // TODO fix user
-            conn_params.user("rory", None);
+            if let Some(username) = users::get_current_username() {
+                conn_params.user(&username, None);
+            }
             // TODO read hosts
             let conn_params = conn_params.build(postgres::params::Host::Tcp("localhost".to_string()));
 

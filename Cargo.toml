@@ -12,6 +12,7 @@ wkb = { path = "../rust-wkb" }
 geo = { git = "file:///home/rory/code/rust/rust-geo", branch = "rory-everything" }
 clap = "2"
 serde_json = "1"
+users = "0.6.0"
 
 [profile.release]
 debug=true
