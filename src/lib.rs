@@ -115,7 +115,7 @@ impl Layers {
                 dbname: layer["Datasource"]["dbname"].as_str().map(|x| x.to_owned()),
                 minzoom: layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(global_minzoom) as u8,
                 maxzoom: layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(global_maxzoom) as u8,
-                buffer: 0, //layer["properties"]["buffer-size"].as_i64().map(|x| x as u16).unwrap_or(0) as u16,
+                buffer: layer["properties"]["buffer-size"].as_i64().map(|x| x as u16).unwrap_or(0) as u16,
                 table: layer["Datasource"]["table"].as_str().unwrap().to_owned(),
             })
             // FIXME finish this thing
@@ -355,8 +355,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
     for layer in layers.layers.iter() {
         let minzoom = layer.minzoom;
         let maxzoom = layer.maxzoom;
-        // One 'pixel' of buffer space is actually 16 pixels of space now
-        let buffer = (layer.buffer as i64) * 16;
         let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
 
         // Skip layers which are not on this zoom
@@ -364,14 +362,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             continue;
         }
 
-        let layer_name = &layer.id;
+        // One 'pixel' of buffer space is actually 16 pixels of space now
+        let buffer = (layer.buffer as i64) * 16;
 
-        // roads-low-zoom BAD
-        let bad_layer = metatile.zoom() == 7 && layer_name == "landcover-low-zoom";
-        if metatile.zoom() == 7 {
-            println!("layer {:?}", layer_name);
-            println!("bad {}", bad_layer);
-        }
+        let layer_name = &layer.id;
 
         let conn = connection_pool.connection_for_layer(&layer_name);
         
@@ -450,13 +444,13 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 //println!("Skipping polygon");
                 continue;
             }
-            let mut is_polygon = false;
-            if let Geometry::MultiPolygon(_) = geom {
-                //println!("Is mulitpolygon");
-                is_polygon = true;
-                //println!("Skipping multipolygon");
-                //continue;
-            }
+            //let mut is_polygon = false;
+            //if let Geometry::MultiPolygon(_) = geom {
+            //    //println!("Is mulitpolygon");
+            //    is_polygon = true;
+            //    //println!("Skipping multipolygon");
+            //    //continue;
+            //}
 
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
@@ -499,8 +493,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 },
                 Some(g) => g,
             };
-
-
                     
             let mut properties = mapbox_vector_tile::Properties::new();
 
