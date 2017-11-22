@@ -242,6 +242,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
 
         let tiles = single_metatile(&layers, &metatile, &connection_pool);
 
+        assert!(!if_not_exists);
         // FIXME the tile exists check needs to work with metatiles
         //if if_not_exists && filename.exists() {
         //    continue;
