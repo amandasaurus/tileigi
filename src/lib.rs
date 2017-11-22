@@ -78,6 +78,7 @@ pub struct Layers {
 struct Layer {
     minzoom: u8,
     maxzoom: u8,
+    buffer: u16,
     id: String,
     table: String,
     dbname: Option<String>,
@@ -114,6 +115,7 @@ impl Layers {
                 dbname: layer["Datasource"]["dbname"].as_str().map(|x| x.to_owned()),
                 minzoom: layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(global_minzoom) as u8,
                 maxzoom: layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(global_maxzoom) as u8,
+                buffer: 0, //layer["properties"]["buffer-size"].as_i64().map(|x| x as u16).unwrap_or(0) as u16,
                 table: layer["Datasource"]["table"].as_str().unwrap().to_owned(),
             })
             // FIXME finish this thing
@@ -353,6 +355,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
     for layer in layers.layers.iter() {
         let minzoom = layer.minzoom;
         let maxzoom = layer.maxzoom;
+        // One 'pixel' of buffer space is actually 16 pixels of space now
+        let buffer = (layer.buffer as i64) * 16;
         let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
 
         // Skip layers which are not on this zoom
@@ -361,6 +365,13 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         }
 
         let layer_name = &layer.id;
+
+        // roads-low-zoom BAD
+        let bad_layer = metatile.zoom() == 7 && layer_name == "landcover-low-zoom";
+        if metatile.zoom() == 7 {
+            println!("layer {:?}", layer_name);
+            println!("bad {}", bad_layer);
+        }
 
         let conn = connection_pool.connection_for_layer(&layer_name);
         
@@ -372,15 +383,20 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         let ur = metatile.ne_corner().to_3857();
 
         // TODO vtiles have y positive going down, is this correct??
-        let minx = ll.0 as f64;
-        let miny = ll.1 as f64;
-        let maxx = ur.0 as f64;
-        let maxy = ur.1 as f64;
-
-        // FIXME include buffer in bbox
-        let bbox = format!("ST_SetSRID(ST_MakeBox2D(ST_Point({llx}, {lly}), ST_Point({urx}, {ury})), 3857)", llx=ll.0, lly=ll.1, urx=ur.0, ury=ur.1);
         let tile_width = (ur.0 - ll.0) as f64;
         let tile_height = (ur.1 - ll.1) as f64;
+
+        // calculate how much to expand the bbox to get the buffer.
+        // Similar calculation for the pixel size
+        let buffer_width = (tile_width / canvas_size)*(buffer as f64);
+        let buffer_height = (tile_height / canvas_size)*(buffer as f64);
+
+        let minx = ll.0 as f64 - buffer_width;
+        let miny = ll.1 as f64 - buffer_height;
+        let maxx = ur.0 as f64 + buffer_width;
+        let maxy = ur.1 as f64 + buffer_height;
+
+        let bbox = format!("ST_SetSRID(ST_MakeBox2D(ST_Point({llx}, {lly}), ST_Point({urx}, {ury})), 3857)", llx=minx, lly=miny, urx=maxx, ury=maxy);
         assert!(tile_height > 0.);
         assert!(tile_width > 0.);
 
@@ -411,7 +427,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
         let mut res = res.iter().enumerate();
 
+        let mut num_objects = 0;
+
         for (i, row) in res {
+            num_objects += 1;
+
 
             // First object is the ST_AsBinary
             // TODO Does this do any copies that we don't want?
@@ -426,6 +446,17 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 Ok(g) => g,
             };
 
+            if let Geometry::Polygon(_) = geom {
+                //println!("Skipping polygon");
+                continue;
+            }
+            let mut is_polygon = false;
+            if let Geometry::MultiPolygon(_) = geom {
+                //println!("Is mulitpolygon");
+                is_polygon = true;
+                //println!("Skipping multipolygon");
+                //continue;
+            }
 
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
@@ -446,7 +477,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 continue;
             }
 
-
             // TODO after converting to integer, maybe run a simple algorithm that removes points
             // which are on the line, i.e. A-B-C is straight line, so remove B. This keeps the
             // shape the same, but could reduce the number of points, which means other algorithms
@@ -462,13 +492,14 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             // clip geometry, so no part of it goes outside the bbox. PostgreSQL will return
             // anything that overlaps.
-            let geom = match clip_to_bbox(Cow::Owned(geom), &geo::Bbox{ xmin: 0, xmax: extent as i64, ymin: 0, ymax: extent as i64 }) {
+            let geom = match clip_to_bbox(Cow::Owned(geom), &geo::Bbox{ xmin: -(buffer as i64), xmax: extent as i64 + buffer as i64, ymin: -(buffer as i64), ymax: extent as i64 + buffer as i64 }) {
                 None => {
                     // geometry is outside the bbox, so skip
                     continue;
                 },
                 Some(g) => g,
             };
+
 
                     
             let mut properties = mapbox_vector_tile::Properties::new();
@@ -506,13 +537,25 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             //
             // We want to do this in order, so we reverse the vec, and the pop from the end
             // (which is the original front).
-            let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom).into_iter().filter(|&(t, ref g)| g.is_some()).collect();
+            // FIXME rather than filtering out invalid geoms here, prevent the clipping code from
+            // generating invalid geoms in the first place
+            // One error was creating a linestring with 2 points, both the same
+            let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
+                |(t, g)| match g {
+                    Some(g) => {
+                        if is_valid(&g) {
+                            Some((t, g))
+                        } else {
+                            None
+                        }
+                    },
+                    None => None,
+                }).collect();
             geoms.reverse();
 
             loop {
                 if geoms.len() <= 1 { break; }
                 if let Some((tile, geom)) = geoms.pop() {
-                    let mut geom = geom.unwrap();
 
                     let i = (tile.x() - metatile.x()) as i64;
                     let j = (tile.y() - metatile.y()) as i64;
@@ -529,7 +572,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             if geoms.is_empty() { continue; }
             if let Some((tile, geom)) = geoms.pop() {
-                let mut geom = geom.unwrap();
                 let i = (tile.x() - metatile.x()) as i64;
                 let j = (tile.y() - metatile.y()) as i64;
 
