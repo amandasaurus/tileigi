@@ -25,6 +25,10 @@ pub fn is_polygon_valid<T: CoordinateType>(p: &Polygon<T>) -> bool {
         return false;
     }
 
+    if p.interiors.iter().any(|i| i.0.len() < 4) {
+        return false;
+    }
+
     true
 }
 
@@ -54,4 +58,19 @@ pub fn remove_duplicate_points<T: CoordinateType>(geom: &mut Geometry<T>) {
         _ => {},
     }
 }
+
+pub fn ensure_polygon_orientation<T: CoordinateType>(geom: &mut Geometry<T>) {
+    match *geom {
+        Geometry::Polygon(ref mut p) => {
+            // This is stupid, this is supposed to be the other way around!!
+            // FIXME check the geo code for winding, make sure it's not the wrong way around
+            p.exterior.make_clockwise_winding();
+            for i in p.interiors.iter_mut() {
+                i.make_counterclockwise_winding();
+            }
+        },
+        _ => {},
+    }
+}
+
 

@@ -479,6 +479,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 ));
 
             validity::remove_duplicate_points(&mut geom);
+            validity::ensure_polygon_orientation(&mut geom);
             let geom = geom;
             if ! is_valid(&geom) {
                 continue;
