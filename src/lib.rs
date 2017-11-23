@@ -447,17 +447,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             let mut bad_obj = false;
             if let Geometry::Polygon(ref x) = geom {
-                //if metatile.zoom() == 4 {
-                //    bad_obj = true;
+                // at z7 for both tiles in IE
+                //if metatile.zoom() == 7 && num_objects >= ?? {
+                //    continue;
                 //}
-                // at z4
-                // 10 good
-                // 50 bad
-                if num_objects >= 25 {
-                    continue;
-                //} else {
-                //    println!("Parsed wkb\n{:?}", x);
-                }
+                //bad_obj = metatile.zoom() == 7 && num_objects == ??;
             }
             if let Geometry::MultiPolygon(_) = geom {
                 //println!("Is mulitpolygon");
