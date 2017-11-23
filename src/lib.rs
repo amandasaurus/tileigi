@@ -117,7 +117,8 @@ impl Layers {
                 dbname: layer["Datasource"]["dbname"].as_str().map(|x| x.to_owned()),
                 minzoom: layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(global_minzoom) as u8,
                 maxzoom: layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(global_maxzoom) as u8,
-                buffer: layer["properties"]["buffer-size"].as_i64().map(|x| x as u16).unwrap_or(0) as u16,
+                // FIXME buffer is making different layers offset at different amounts
+                buffer: 0, //layer["properties"]["buffer-size"].as_i64().map(|x| x as u16).unwrap_or(0) as u16,
                 table: layer["Datasource"]["table"].as_str().unwrap().to_owned(),
             })
             // FIXME finish this thing
