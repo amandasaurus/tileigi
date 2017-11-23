@@ -3,6 +3,7 @@ use geo::*;
 pub fn is_valid<T: CoordinateType>(geom: &Geometry<T>) -> bool {
     match *geom {
         Geometry::LineString(ref ls) => is_linestring_valid(ls),
+        Geometry::Polygon(ref p) => is_polygon_valid(p),
         _ => true,
     }
 }
@@ -18,6 +19,15 @@ pub fn is_linestring_valid<T: CoordinateType>(ls: &LineString<T>) -> bool {
 
     true
 }
+
+pub fn is_polygon_valid<T: CoordinateType>(p: &Polygon<T>) -> bool {
+    if p.exterior.0.len() < 4 {
+        return false;
+    }
+
+    true
+}
+
 
 fn remove_duplicate_points_linestring<T: CoordinateType>(ls: &mut LineString<T>) {
     let mut i = 0;
