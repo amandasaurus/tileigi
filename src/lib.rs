@@ -445,17 +445,25 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 Ok(g) => g,
             };
 
-            if let Geometry::Polygon(_) = geom {
-                //println!("Skipping polygon");
+            let mut bad_obj = false;
+            if let Geometry::Polygon(ref x) = geom {
+                //if metatile.zoom() == 4 {
+                //    bad_obj = true;
+                //}
+                // at z4
+                // 10 good
+                // 50 bad
+                if num_objects >= 25 {
+                    continue;
+                //} else {
+                //    println!("Parsed wkb\n{:?}", x);
+                }
+            }
+            if let Geometry::MultiPolygon(_) = geom {
+                //println!("Is mulitpolygon");
+                //println!("Skipping multipolygon");
                 continue;
             }
-            //let mut is_polygon = false;
-            //if let Geometry::MultiPolygon(_) = geom {
-            //    //println!("Is mulitpolygon");
-            //    is_polygon = true;
-            //    //println!("Skipping multipolygon");
-            //    //continue;
-            //}
 
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
@@ -549,6 +557,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     None => None,
                 }).collect();
             geoms.reverse();
+            if bad_obj {
+                println!("geoms {:?}", geoms);
+            }
 
             loop {
                 if geoms.len() <= 1 { break; }
