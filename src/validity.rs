@@ -64,6 +64,8 @@ pub fn ensure_polygon_orientation<T: CoordinateType>(geom: &mut Geometry<T>) {
         Geometry::Polygon(ref mut p) => {
             // This is stupid, this is supposed to be the other way around!!
             // FIXME check the geo code for winding, make sure it's not the wrong way around
+            // Is this because in MVT the Y goes down? Hence the winding is the other way?
+            // Investigate
             p.exterior.make_clockwise_winding();
             for i in p.interiors.iter_mut() {
                 i.make_counterclockwise_winding();
