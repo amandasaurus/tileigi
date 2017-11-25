@@ -542,8 +542,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // One error was creating a linestring with 2 points, both the same
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
-                    Some(g) => {
+                    Some(mut g) => {
                         if is_valid(&g) {
+                            validity::ensure_polygon_orientation(&mut g);
                             Some((t, g))
                         } else {
                             None
