@@ -445,6 +445,23 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 Ok(g) => g,
             };
 
+            let mut bad_obj = false;
+            //if let Geometry::Polygon(ref x) = geom {
+            //    // at z7 for both tiles in IE
+            //    // 4_779 good C/KY
+            //    // 4_780 bad
+            //    // 4_779 is the bad object
+            //    //if metatile.zoom() == 7 && num_objects >= 4_780 {
+            //    //    continue;
+            //    //}
+            //    //bad_obj = metatile.zoom() == 7 && num_objects == 4_779;
+            //}
+            if let Geometry::MultiPolygon(_) = geom {
+                //println!("Is mulitpolygon");
+                //println!("Skipping multipolygon");
+                continue;
+            }
+
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
 
@@ -551,6 +568,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
 
                     if is_valid(&geom) {
+                        if bad_obj {
+                            println!("geom {:?}", geom);
+                        }
 
                         let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                         let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
@@ -570,6 +590,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
 
                 if is_valid(&geom) {
+                    if bad_obj {
+                        println!("geom {:?}", geom);
+                    }
                     let feature = mapbox_vector_tile::Feature::new(geom, properties);
                     let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
                     let mvt_tile = results.get_mut(i).unwrap();
