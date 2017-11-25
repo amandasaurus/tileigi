@@ -4,6 +4,7 @@ pub fn is_valid<T: CoordinateType>(geom: &Geometry<T>) -> bool {
     match *geom {
         Geometry::LineString(ref ls) => is_linestring_valid(ls),
         Geometry::Polygon(ref p) => is_polygon_valid(p),
+        Geometry::MultiPolygon(ref mp) => mp.0.iter().all(|p| is_polygon_valid(p)),
         _ => true,
     }
 }
