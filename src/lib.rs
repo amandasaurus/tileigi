@@ -567,10 +567,14 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     // Here we convert it back to i32
                     let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
 
-                    let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
-                    let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
-                    let mvt_tile = results.get_mut(i).unwrap();
-                    mvt_tile.add_feature(&layer_name, feature);
+                    if is_valid(&geom) {
+
+                        let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
+                        let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
+                        let mvt_tile = results.get_mut(i).unwrap();
+                        mvt_tile.add_feature(&layer_name, feature);
+
+                    }
                 }
             }
 
@@ -582,10 +586,12 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 // Here we convert it back to i32
                 let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
 
-                let feature = mapbox_vector_tile::Feature::new(geom, properties);
-                let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
-                let mvt_tile = results.get_mut(i).unwrap();
-                mvt_tile.add_feature(&layer_name, feature);
+                if is_valid(&geom) {
+                    let feature = mapbox_vector_tile::Feature::new(geom, properties);
+                    let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
+                    let mvt_tile = results.get_mut(i).unwrap();
+                    mvt_tile.add_feature(&layer_name, feature);
+                }
             }
 
         }
