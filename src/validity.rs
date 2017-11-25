@@ -25,7 +25,25 @@ pub fn is_polygon_valid<T: CoordinateType>(p: &Polygon<T>) -> bool {
         return false;
     }
 
-    if p.interiors.iter().any(|i| i.0.len() < 4) {
+    if p.exterior.0.iter().skip(1).all(|&pt| pt == p.exterior.0[0]) {
+        // All points the same
+        return false;
+    }
+
+    for i in p.interiors.iter() {
+        if i.0.len() < 4 {
+            return false;
+        }
+
+        if i.0.iter().skip(1).all(|&pt| pt == i.0[0]) {
+            // All points the same
+            return false;
+        }
+    }
+
+    // In theory this is backwards. Ext rings should be CCW, and int rings CW. But in vector tiles
+    // the y goes down, so it's flipped.
+    if p.exterior.is_ccw() || p.interiors.iter().any(|i| i.is_cw()) {
         return false;
     }
 
