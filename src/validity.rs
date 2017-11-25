@@ -22,16 +22,26 @@ pub fn is_linestring_valid<T: CoordinateType>(ls: &LineString<T>) -> bool {
 }
 
 pub fn is_polygon_valid<T: CoordinateType>(p: &Polygon<T>) -> bool {
-    if p.exterior.0.len() < 4 {
+    // Sometimes there are duplicate points, e.g. A-A-B-A. If we remove all dupes, we can see if
+    // there are <4 points
+    // Gah clones!
+    let mut ext = p.exterior.clone();
+    remove_duplicate_points_linestring(&mut ext);
+    // TODO fix clipping code etc to not make linestrings with duplicated points
+
+    if ext.0.len() < 4 {
         return false;
     }
 
-    if p.exterior.0.iter().skip(1).all(|&pt| pt == p.exterior.0[0]) {
+    if ext.0.iter().skip(1).all(|&pt| pt == ext.0[0]) {
         // All points the same
         return false;
     }
 
     for i in p.interiors.iter() {
+        let mut i = i.clone();
+        remove_duplicate_points_linestring(&mut i);
+
         if i.0.len() < 4 {
             return false;
         }
@@ -44,7 +54,7 @@ pub fn is_polygon_valid<T: CoordinateType>(p: &Polygon<T>) -> bool {
 
     // In theory this is backwards. Ext rings should be CCW, and int rings CW. But in vector tiles
     // the y goes down, so it's flipped.
-    if p.exterior.is_ccw() || p.interiors.iter().any(|i| i.is_cw()) {
+    if ext.is_ccw() || p.interiors.iter().any(|i| i.is_cw()) {
         return false;
     }
 
