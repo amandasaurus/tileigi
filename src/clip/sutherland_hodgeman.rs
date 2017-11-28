@@ -142,19 +142,19 @@ mod test {
     #[test]
     fn border_clip_simple_no_cut() {
         // Tests which should pass the polygon though directly
-        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMax(10)),
+        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into()), &Border::XMax(10)),
             Some(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into())
         );
 
-        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(0)),
+        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into()), &Border::XMin(0)),
             Some(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into())
         );
 
-        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(-1)),
+        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into()), &Border::XMin(-1)),
             Some(vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into())
         );
 
-        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(10)),
+        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into()), &Border::XMin(10)),
             None
         );
     }
@@ -162,18 +162,18 @@ mod test {
     #[test]
     fn border_clip_boxes() {
         // here polygons are going to be cut
-        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMin(1)),
+        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into()), &Border::XMin(1)),
             Some(vec![(1, 5), (5, 5), (5, 0), (1, 0), (1, 5)].into())
         );
-        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::YMin(1)),
+        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into()), &Border::YMin(1)),
             Some(vec![(0, 1), (0, 5), (5, 5), (5, 1), (0, 1)].into())
         );
 
-        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::XMax(2)),
+        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into()), &Border::XMax(2)),
             Some(vec![(0, 0), (0, 5), (2, 5), (2, 0), (0, 0)].into())
         );
 
-        assert_eq!(clip_ring_to_border(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into(), &Border::YMax(2)),
+        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0, 0), (0, 5), (5, 5), (5, 0), (0, 0)].into()), &Border::YMax(2)),
             Some(vec![(0, 0), (0, 2), (5, 2), (5, 0), (0, 0)].into())
         );
     }
@@ -181,7 +181,7 @@ mod test {
     #[test]
     fn border_clip_funny_shapes(){
         // Triangle pointing up
-        assert_eq!(clip_ring_to_border(&vec![(0., 0.), (1., 5.), (2., 0.), (0., 0.)].into(), &Border::YMax(2.)),
+        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0., 0.), (1., 5.), (2., 0.), (0., 0.)].into()), &Border::YMax(2.)),
             Some(vec![(0., 0.), (0.4, 2.), (1.6, 2.), (2., 0.), (0., 0.)].into())
         );
     }
@@ -193,7 +193,7 @@ mod test {
             vec![ vec![(1, 1), (1, 4), (4, 4), (4, 1), (1, 1)].into() ],
             );
 
-        let new_poly = clip_polygon_to_border(&poly, &Border::XMax(3));
+        let new_poly = clip_polygon_to_border(Cow::Borrowed(&poly), &Border::XMax(3));
 
         // yes this is a degenerate polygon
         assert_eq!(new_poly, Some(Polygon::new(
@@ -211,7 +211,7 @@ mod test {
             );
 
         let bbox = Bbox{ xmin: 5, ymin: 5, xmax: 9, ymax: 9 };
-        let new_poly = clip_polygon_to_bbox(&poly, &bbox);
+        let new_poly = clip_polygon_to_bbox(Cow::Borrowed(&poly), &bbox);
 
         // yes this is a degenerate polygon
         assert_eq!(new_poly, Some(Polygon::new(

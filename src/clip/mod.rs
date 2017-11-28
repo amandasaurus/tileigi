@@ -19,8 +19,8 @@ mod cohen_sutherland;
 mod sutherland_hodgeman;
 //mod weiler_atherton;
 
-#[cfg(test)]
-mod test;
+//#[cfg(test)]
+//mod test;
 
 // A border we want
 #[derive(Debug,Clone,Copy)]
