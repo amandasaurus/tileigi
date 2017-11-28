@@ -446,16 +446,21 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             };
 
             let mut bad_obj = false;
-            //if let Geometry::Polygon(ref x) = geom {
-            //    // at z7 for both tiles in IE
-            //    // 4_779 good C/KY
-            //    // 4_780 bad
-            //    // 4_779 is the bad object
-            //    //if metatile.zoom() == 7 && num_objects >= 4_780 {
-            //    //    continue;
-            //    //}
-            //    //bad_obj = metatile.zoom() == 7 && num_objects == 4_779;
-            //}
+            if let Geometry::Polygon(ref x) = geom {
+                // at z8 Wexford corner
+                // 8_917 good
+                // 8_918 bad
+                if metatile.zoom() == 8 && num_objects >= 8_918 {
+                    continue;
+                }
+                bad_obj = metatile.zoom() == 8 && num_objects == 8_917;
+                // 8_917 is the bad obj
+                // It has a self-intersecting polygon it goes across itself. 2 of the line segments
+                // intersect
+                // This is the problem polygon:
+                // { "type": "Polygon", "coordinates": [ [ [14.13, 6.07], [14.37, 6.32], [14.16, 6.32], [14.36, 6.24], [14.13, 6.07] ]] }
+
+            }
             if let Geometry::MultiPolygon(_) = geom {
                 //println!("Is mulitpolygon");
                 //println!("Skipping multipolygon");
