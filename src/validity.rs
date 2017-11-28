@@ -1,4 +1,7 @@
 use geo::*;
+use geo::map_coords::MapCoords;
+use geo::intersects::Intersects;
+use std::cmp::{min, max};
 
 pub fn is_valid<T: CoordinateType>(geom: &Geometry<T>) -> bool {
     match *geom {
@@ -104,4 +107,73 @@ pub fn ensure_polygon_orientation<T: CoordinateType>(geom: &mut Geometry<T>) {
     }
 }
 
+fn has_self_intersections<T: CoordinateType>(ls: &LineString<T>) -> bool {
+    false
+}
+
+/// True iff the segments ab intersect at any point except their endpoints
+fn intersect<P: Into<Point<T>>, T: CoordinateType>(a: P, b: P, c: P, d: P) -> bool {
+    // This really need improving
+    // FIXME add initiall bbox check which should speed it up
+    let a: Point<T> = a.into();
+    let b: Point<T> = b.into();
+    let c: Point<T> = c.into();
+    let d: Point<T> = d.into();
+
+    assert!(a != b);
+    assert!(c != d);
+
+    let (x1, y1) = (a.x(), a.y());
+    let (x2, y2) = (b.x(), b.y());
+    let (x3, y3) = (c.x(), c.y());
+    let (x4, y4) = (d.x(), d.y());
+
+    let a = x2 - x1;
+    let b = x3 - x4;
+    let c = y2 - y1;
+    let d = y3 - y4;
+
+    let e = x3 - x1;
+    let f = y3 - y1;
+
+    let determinate = a*d - b*c;
+    if determinate == T::zero() {
+        return false;
+    }
+    // FIXME what if determinate < 0 ?
+    assert!(determinate >= T::zero());
+
+    let sd = d*e - b*e;
+    if sd > determinate || sd < T::zero() {
+        return false
+    }
+
+    let td = e*f - a*f;
+    if td > determinate || td < T::zero() {
+        return false
+    }
+
+    if (td == determinate || td == T::zero()) && (sd == T::zero() || sd == determinate) {
+        // endpoints overlap
+        return false;
+    }
+
+    true
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn intersect1() {
+        assert!(!intersect((0, 0), (0, 10), (5, 1), (5, 2)));
+        assert!(intersect((0, 0), (0, 10), (0, 5), (5, 5)));
+
+        assert!(!intersect((0, 0), (0, 10), (0, 10), (0, 20)));
+        assert!(intersect((0, 0), (0, 10), (-5, 5), (5, 5)));
+    }
+
+
+}
 
