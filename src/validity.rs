@@ -1,11 +1,11 @@
 use geo::*;
 use geo::map_coords::MapCoords;
 use geo::intersects::Intersects;
-use std::cmp::{min, max};
+use std::cmp::{min, max, Ord};
 use num_traits::Signed;
 use std::fmt::Debug;
 
-pub fn is_valid<T: CoordinateType+Signed+Debug>(geom: &Geometry<T>) -> bool {
+pub fn is_valid<T: CoordinateType+Signed+Debug+Ord>(geom: &Geometry<T>) -> bool {
     match *geom {
         Geometry::LineString(ref ls) => is_linestring_valid(ls),
         Geometry::Polygon(ref p) => is_polygon_valid(p),
@@ -15,7 +15,7 @@ pub fn is_valid<T: CoordinateType+Signed+Debug>(geom: &Geometry<T>) -> bool {
     }
 }
 
-pub fn is_linestring_valid<T: CoordinateType>(ls: &LineString<T>) -> bool {
+fn is_linestring_valid<T: CoordinateType>(ls: &LineString<T>) -> bool {
     if ls.0.len() < 2 {
         return false;
     }
@@ -27,18 +27,18 @@ pub fn is_linestring_valid<T: CoordinateType>(ls: &LineString<T>) -> bool {
     true
 }
 
-pub fn is_polygon_valid<T: CoordinateType+Signed+Debug>(p: &Polygon<T>) -> bool {
+fn is_polygon_valid<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon<T>) -> bool {
+    if p.exterior.0.len() < 4 {
+        return false;
+    }
+
     // Sometimes there are duplicate points, e.g. A-A-B-A. If we remove all dupes, we can see if
     // there are <4 points
-    // Gah clones!
     if num_points_excl_duplicates(&p.exterior) < 4 {
         return false;
     }
     // TODO fix clipping code etc to not make linestrings with duplicated points
 
-    if p.exterior.0.len() < 4 {
-        return false;
-    }
 
     if p.exterior.0.iter().skip(1).all(|&pt| pt == p.exterior.0[0]) {
         // All points the same
@@ -181,7 +181,7 @@ pub fn ensure_polygon_orientation<T: CoordinateType>(geom: &mut Geometry<T>) {
     }
 }
 
-fn has_self_intersections<T: CoordinateType+Signed+Debug>(ls: &LineString<T>) -> bool {
+fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>) -> bool {
     if ls.0.len() <= 4 {
         // cannot have a self intersection with this few members. (There shouldn't be <4 anyway)
         // With 4 points, it's a orientation, not self-intersection thing really
@@ -204,11 +204,17 @@ fn has_self_intersections<T: CoordinateType+Signed+Debug>(ls: &LineString<T>) ->
 }
 
 /// True iff the segments |p1p2| and |p3p4| intersect at any point except their endpoints
-fn intersect_excl_end<T: CoordinateType+Signed+Debug>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> bool {
+fn intersect_excl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> bool {
     // FIXME add initiall bbox check which should speed it up
-
-    assert!((x1, y1) != (x2, y2));
-    assert!((x3, y3) != (x4, y4));
+    
+    if max(x1, x2) < min(x3, x4) || min(x1, x2) > max(x3, x4)
+        || max(y1, y2) < min(y3, y4) || min(y1, y2) > max(y3, y4)
+    {
+        return false;
+    }
+    
+    debug_assert!((x1, y1) != (x2, y2));
+    debug_assert!((x3, y3) != (x4, y4));
 
     let a = x2 - x1;
     let b = x3 - x4;
