@@ -14,6 +14,8 @@ use geo::algorithm::map_coords::MapCoordsInplace;
 use geo::algorithm::boundingbox::BoundingBox;
 use geo::algorithm::contains::Contains;
 
+use ::validity::remove_duplicate_points;
+
 // local stuff
 mod cohen_sutherland;
 mod sutherland_hodgeman;
@@ -497,7 +499,17 @@ pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i64>, buffer: i64) 
 
 pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i64>, buffer: i64) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
     // Simple approach for now
-    slice_box(Cow::Owned(geom), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096, buffer)
+    let mut res = slice_box(Cow::Owned(geom), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096, buffer);
+
+    // TODO make the slice_box etc not produce geoms with this result
+    for &mut (tile, ref mut geom_opt) in res.iter_mut() {
+        if let &mut Some(ref mut geom) = geom_opt {
+            remove_duplicate_points(geom);
+        }
+    }
+
+    res
+
 
     // re-enable this later, when all functions support buffer
     //match geom {
