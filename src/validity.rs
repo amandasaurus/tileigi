@@ -2,6 +2,7 @@ use geo::*;
 use geo::map_coords::MapCoords;
 use geo::intersects::Intersects;
 use std::cmp::{min, max};
+use num_traits::Signed;
 
 pub fn is_valid<T: CoordinateType>(geom: &Geometry<T>) -> bool {
     match *geom {
@@ -112,7 +113,7 @@ fn has_self_intersections<T: CoordinateType>(ls: &LineString<T>) -> bool {
 }
 
 /// True iff the segments ab intersect at any point except their endpoints
-fn intersect<P: Into<Point<T>>, T: CoordinateType>(a: P, b: P, c: P, d: P) -> bool {
+fn intersect<P: Into<Point<T>>, T: CoordinateType+Signed>(a: P, b: P, c: P, d: P) -> bool {
     // This really need improving
     // FIXME add initiall bbox check which should speed it up
     let a: Point<T> = a.into();
@@ -140,15 +141,19 @@ fn intersect<P: Into<Point<T>>, T: CoordinateType>(a: P, b: P, c: P, d: P) -> bo
     if determinate == T::zero() {
         return false;
     }
-    // FIXME what if determinate < 0 ?
-    assert!(determinate >= T::zero());
 
-    let sd = d*e - b*e;
+    // we know it's not zero
+    let signum = determinate.signum();
+    let determinate = determinate.abs();
+
+
+    let sd = signum * (a*f - c*e);
     if sd > determinate || sd < T::zero() {
         return false
     }
 
-    let td = e*f - a*f;
+
+    let td = signum*(d*e - b*f);
     if td > determinate || td < T::zero() {
         return false
     }
@@ -172,6 +177,8 @@ mod test {
 
         assert!(!intersect((0, 0), (0, 10), (0, 10), (0, 20)));
         assert!(intersect((0, 0), (0, 10), (-5, 5), (5, 5)));
+        assert!(!intersect((0, 0), (10, 0), (10, 0), (10, 10)));
+        assert!(intersect((-5, 5), (5, 5), (0, 0), (0, 10)));
     }
 
 

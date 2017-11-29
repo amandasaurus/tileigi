@@ -10,6 +10,7 @@ extern crate geo;
 extern crate serde_json;
 
 extern crate users;
+extern crate num_traits;
 
 use std::fs::File;
 use std::fs;
