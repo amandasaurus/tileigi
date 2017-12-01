@@ -448,23 +448,18 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             let mut bad_obj = false;
             if let Geometry::Polygon(ref x) = geom {
-                // at z8 Wexford corner
-                // 8_917 good
-                // 8_918 bad
-                if metatile.zoom() == 8 && num_objects >= 8_918 {
+                // at z10 southside dublin
+                // 39_469 good
+                // 39_470 bad
+                // the bad obj is 39_469
+                if metatile.zoom() == 10 && num_objects >= 39_470 {
                     continue;
                 }
-                bad_obj = metatile.zoom() == 8 && num_objects == 8_917;
-                // 8_917 is the bad obj
-                // It has a self-intersecting polygon it goes across itself. 2 of the line segments
-                // intersect
-                // This is the problem polygon:
-                // { "type": "Polygon", "coordinates": [ [ [14.13, 6.07], [14.37, 6.32], [14.16, 6.32], [14.36, 6.24], [14.13, 6.07] ]] }
-
+                bad_obj = metatile.zoom() == 10 && num_objects == 39_469;
             }
             if let Geometry::MultiPolygon(_) = geom {
-                //println!("Is mulitpolygon");
-                //println!("Skipping multipolygon");
+            //    //println!("Is mulitpolygon");
+            //    //println!("Skipping multipolygon");
                 continue;
             }
 
@@ -574,9 +569,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
 
                     if is_valid(&geom) {
-                        if bad_obj {
-                            println!("geom {:?}", geom);
-                        }
 
                         let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                         let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
