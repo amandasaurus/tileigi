@@ -201,6 +201,14 @@ pub fn ensure_polygon_orientation<T: CoordinateType>(geom: &mut Geometry<T>) {
                 i.make_counterclockwise_winding();
             }
         },
+        Geometry::MultiPolygon(ref mut mp) => {
+            for p in mp.0.iter_mut() {
+                p.exterior.make_clockwise_winding();
+                for i in p.interiors.iter_mut() {
+                    i.make_counterclockwise_winding();
+                }
+            }
+        },
         _ => {},
     }
 }
