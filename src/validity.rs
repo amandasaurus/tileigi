@@ -15,6 +15,16 @@ pub fn is_valid<T: CoordinateType+Signed+Debug+Ord>(geom: &Geometry<T>) -> bool 
     }
 }
 
+pub fn is_valid_skip_expensive<T: CoordinateType+Signed+Debug+Ord>(geom: &Geometry<T>) -> bool {
+    match *geom {
+        Geometry::LineString(ref ls) => is_linestring_valid(ls),
+        Geometry::Polygon(ref p) => is_polygon_valid_skip_expensive(p),
+        Geometry::MultiPolygon(ref mp) => mp.0.iter().all(|p| is_polygon_valid_skip_expensive(p)),
+        Geometry::MultiLineString(ref mls) => mls.0.iter().all(|ls| is_linestring_valid(ls)),
+        _ => true,
+    }
+}
+
 fn is_linestring_valid<T: CoordinateType>(ls: &LineString<T>) -> bool {
     if ls.0.len() < 2 {
         return false;
@@ -28,6 +38,10 @@ fn is_linestring_valid<T: CoordinateType>(ls: &LineString<T>) -> bool {
 }
 
 fn is_polygon_valid<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon<T>) -> bool {
+    is_polygon_valid_skip_expensive(p) && is_polygon_valid_do_expensive(p)
+}
+
+fn is_polygon_valid_skip_expensive<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon<T>) -> bool {
     if p.exterior.0.len() < 4 {
         return false;
     }
@@ -46,9 +60,6 @@ fn is_polygon_valid<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon<T>) -> bool 
         return false;
     }
 
-    if has_self_intersections(&p.exterior) {
-        return false;
-    }
 
     for i in p.interiors.iter() {
         if num_points_excl_duplicates(i) < 4 {
@@ -64,6 +75,19 @@ fn is_polygon_valid<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon<T>) -> bool 
             return false;
         }
 
+    }
+
+
+    true
+}
+
+fn is_polygon_valid_do_expensive<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon<T>) -> bool {
+    if has_self_intersections(&p.exterior) {
+        return false;
+    }
+
+    if p.interiors.iter().any(|i| has_self_intersections(i)) {
+        return false;
     }
 
     // In theory this is backwards. Ext rings should be CCW, and int rings CW. But in vector tiles

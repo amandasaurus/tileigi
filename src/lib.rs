@@ -38,7 +38,7 @@ mod clip;
 use clip::{clip_to_bbox,clip_geometry_to_tiles};
 
 mod validity;
-use validity::is_valid;
+use validity::{is_valid, is_valid_skip_expensive};
 
 pub struct ConnectionPool {
     connections: HashMap<ConnectParams, Connection>,
@@ -466,6 +466,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
 
+            // TODO there are a lot of calls to `is_valid`, which is computationally expensive, but
+            // removing them makes it slower, probably because of the lots of invalid geoms
+
             // Convert to integer geom. MVT tiles have integers in i32, but I am getting i32
             // overflows when simplifying, so initally convert it to i64, and then convert it back.
             // it's a little poor since there are duplicate data.
@@ -479,7 +482,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             validity::remove_duplicate_points(&mut geom);
             validity::ensure_polygon_orientation(&mut geom);
             let geom = geom;
-            if ! is_valid(&geom) {
+            if ! is_valid_skip_expensive(&geom) {
                 continue;
             }
 
