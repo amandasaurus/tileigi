@@ -588,7 +588,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 let j = (tile.y() - metatile.y()) as i64;
 
                 // Here we convert it back to i32
-                let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
+                let mut geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
+                //validity::ensure_polygon_orientation(&mut geom);
 
                 if is_valid(&geom) {
                     if bad_obj {
