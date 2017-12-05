@@ -447,21 +447,21 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             };
 
             let mut bad_obj = false;
-            if let Geometry::Polygon(ref x) = geom {
-                // at z10 southside dublin
-                // 39_469 good
-                // 39_470 bad
-                // the bad obj is 39_469
-                if metatile.zoom() == 10 && num_objects >= 39_470 {
-                    continue;
-                }
-                bad_obj = metatile.zoom() == 10 && num_objects == 39_469;
-            }
-            if let Geometry::MultiPolygon(_) = geom {
-            //    //println!("Is mulitpolygon");
-            //    //println!("Skipping multipolygon");
-                continue;
-            }
+            //if let Geometry::Polygon(ref x) = geom {
+            //    // at z10 southside dublin
+            //    // 39_469 good
+            //    // 39_470 bad
+            //    // the bad obj is 39_469
+            //    if metatile.zoom() == 10 && num_objects >= 39_470 {
+            //        continue;
+            //    }
+            //    bad_obj = metatile.zoom() == 10 && num_objects == 39_469;
+            //}
+            //if let Geometry::MultiPolygon(_) = geom {
+            ////    //println!("Is mulitpolygon");
+            ////    //println!("Skipping multipolygon");
+            //    continue;
+            //}
 
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
