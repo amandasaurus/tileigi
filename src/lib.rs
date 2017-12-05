@@ -274,7 +274,7 @@ fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &Path
         "vector_layers": layers.layers.iter().map(|layer| {
             let layer_name = &layer.id;
             let columns = columns_for_layer(layer, connection_pool);
-            let minzoom = layer.maxzoom;
+            let minzoom = layer.minzoom;
             let maxzoom = layer.maxzoom;
             let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
             json!({
