@@ -473,15 +473,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // overflows when simplifying, so initally convert it to i64, and then convert it back.
             // it's a little poor since there are duplicate data.
             // FIXME if this is a point, maybe don't do the double change.
-            let mut geom: geo::Geometry<i64> = geom.map_coords(&|&(x, y)|
-                (
-                    (((x - minx) / (maxx - minx))*extent).round() as i64,
-                    (((maxy - y) / (maxy - miny))*extent).round() as i64,
-                ));
-
-            validity::remove_duplicate_points(&mut geom);
+            let mut geom = remap_geometry(geom, minx, maxx, miny, maxy, extent);
+            if geom.is_none() { continue; }
+            let mut geom = geom.unwrap();
             validity::ensure_polygon_orientation(&mut geom);
-            let geom = geom;
             if ! is_valid_skip_expensive(&geom) {
                 continue;
             }
@@ -615,3 +610,114 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
     }).collect()
 
 }
+
+fn remap_linestring(ls: LineString<f64>, minx: f64, maxx: f64, miny: f64, maxy: f64, size: f64, should_be_ring: bool) -> Option<LineString<i64>> {
+    let remap_xy = |x: f64, y: f64| -> (i64, i64) {
+        (
+            (((x - minx) / (maxx - minx))*size).round() as i64,
+            (((maxy - y) / (maxy - miny))*size).round() as i64,
+        )
+    };
+
+    let mut new_points: Vec<Point<i64>> = Vec::with_capacity(ls.0.len());
+    let last_xy = remap_xy(ls.0[0].x(), ls.0[0].y());
+    let mut last_x = last_xy.0;
+    let mut last_y = last_xy.1;
+    new_points.push(Point::new(last_x, last_y));
+
+    // Remap all points, but don't add a point if it's the same location as the last point.
+    for p in ls.0.into_iter().skip(1) {
+        let new_xy = remap_xy(p.x(), p.y());
+        if ! ( new_xy.0 == last_x && new_xy.1 == last_y ) {
+            last_x = new_xy.0;
+            last_y = new_xy.1;
+            new_points.push(Point::new(last_x, last_y));
+        }
+    }
+
+    if should_be_ring {
+        if new_points.len() >= 4 && new_points[0] == new_points[new_points.len()-1] { 
+            Some(LineString(new_points))
+        } else {
+            None
+        }
+    } else {
+        if new_points.len() >= 2 {
+            Some(LineString(new_points))
+        } else {
+            None
+        }
+    }
+}
+
+fn remap_geometry(geom: Geometry<f64>, minx: f64, maxx: f64, miny: f64, maxy: f64, size: f64) -> Option<Geometry<i64>> {
+    let remap_xy = |x: f64, y: f64| -> (i64, i64) {
+        (
+            (((x - minx) / (maxx - minx))*size).round() as i64,
+            (((maxy - y) / (maxy - miny))*size).round() as i64,
+        )
+    };
+
+    match geom {
+        Geometry::Point(p) => {
+            let xy = remap_xy(p.x(), p.y());
+            Some(Geometry::Point(Point::new(xy.0, xy.1)))
+        },
+        Geometry::MultiPoint(mp) => {
+            if mp.0.is_empty() {
+                None
+            } else {
+                Some(Geometry::MultiPoint(MultiPoint(mp.0.into_iter().map(|p| {
+                        let xy = remap_xy(p.x(), p.y());
+                        Point::new(xy.0, xy.1)
+                    }
+                    ).collect::<Vec<Point<i64>>>())))
+            }
+        },
+        Geometry::LineString(ls) => {
+            remap_linestring(ls, minx, maxx, miny, maxy, size, false).and_then(|ls| Some(Geometry::LineString(ls)))
+        },
+        Geometry::MultiLineString(mls) => {
+            let mut res: Vec<LineString<i64>> = mls.0.into_iter().filter_map(|ls| remap_linestring(ls, minx, maxx, miny, maxy, size, false)).collect();
+            match res.len() {
+                0 => None,
+                1 => Some(Geometry::LineString(res.remove(0))),
+                _ => Some(Geometry::MultiLineString(MultiLineString(res))),
+            }
+        },
+        Geometry::Polygon(p) => {
+            let Polygon{ exterior, interiors } = p;
+            match remap_linestring(exterior, minx, maxx, miny, maxy, size, true) {
+                    // Exterior gets simplified away
+                None => None,
+                Some(exterior) => {
+                    let interiors: Vec<LineString<i64>> = interiors.into_iter().filter_map(|int| remap_linestring(int, minx, maxx, miny, maxy, size, true)).collect();
+                    Some(Geometry::Polygon(Polygon::new(exterior, interiors)))
+                }
+            }
+        }
+        Geometry::MultiPolygon(mp) => {
+            let mut res: Vec<Polygon<i64>> = mp.0.into_iter().filter_map(|p| {
+                let Polygon{ exterior, interiors } = p;
+                match remap_linestring(exterior, minx, maxx, miny, maxy, size, true) {
+                        // Exterior gets simplified away
+                    None => None,
+                    Some(exterior) => {
+                        let interiors: Vec<LineString<i64>> = interiors.into_iter().filter_map(|int| remap_linestring(int, minx, maxx, miny, maxy, size, true)).collect();
+                        Some(Polygon::new(exterior, interiors))
+                    }
+                }
+            }).collect();
+
+            match res.len() {
+                0 => None,
+                1 => Some(Geometry::Polygon(res.remove(0))),
+                _ => Some(Geometry::MultiPolygon(MultiPolygon(res))),
+            }
+
+        }
+
+        _ => unimplemented!()
+    }
+}
+
