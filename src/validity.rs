@@ -139,20 +139,35 @@ fn num_points_excl_duplicates<T: CoordinateType>(ls: &LineString<T>) -> usize {
 }
 
 pub fn remove_duplicate_points_linestring<T: CoordinateType>(ls: &mut LineString<T>) {
-    let mut i = 0;
+    if ls.0.len() < 2 {
+        return;
+    }
 
-    // This could be more effecient for cases of many duplicate points in a row.
-    loop {
-        if i >= ls.0.len()-1 {
-            break;
-        }
+    let mut keeps: Vec<bool> = vec![false; ls.0.len()];
+    let mut num_to_keep = 0;
 
-        if ls.0[i] == ls.0[i+1] {
-            ls.0.remove(i+1);
-        } else {
-            i += 1;
+    {
+        // inner scope because we cause an immutable borrow with last_keep.
+        let mut last_keep = &ls.0[0];
+
+        for (idx, point) in ls.0.iter().enumerate().skip(1) {
+            if point == last_keep {
+                keeps[idx] = true;
+                last_keep = point;
+                num_to_keep += 1;
+            }
         }
     }
+
+    if num_to_keep == ls.0.len() {
+        // nothing to do, so early return
+        return;
+    }
+
+    let new_points: Vec<Point<T>> = ls.0.drain(..).zip(keeps.into_iter()).filter_map(|(point, keep)| if keep { Some(point) } else { None }).collect();
+
+    ::std::mem::replace(&mut ls.0, new_points);
+
     loop {
         let len = ls.0.len();
         if len <= 2 { break; }
