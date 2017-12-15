@@ -216,7 +216,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
 
     let mut last_zoom = 255;
     let mut num_tiles_done: u64 = 0;
-    let logging_freq: u32 = 8;
+    let logging_freq: u32 = 4;
     let log_every: u64 = 2u64.pow(logging_freq);
     let mask: u64 = (1u64<<logging_freq) - 1;
     for metatile in MetatilesIterator::new_for_bbox_zoom(metatile_scale, bbox, min_zoom, max_zoom) {
@@ -447,21 +447,22 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             };
 
             let mut bad_obj = false;
-            //if let Geometry::Polygon(ref x) = geom {
+            if let Geometry::Polygon(ref x) = geom {
+                continue;
             //    // at z10 southside dublin
             //    // 39_469 good
             //    // 39_470 bad
             //    // the bad obj is 39_469
-            //    if metatile.zoom() == 10 && num_objects >= 39_470 {
-            //        continue;
-            //    }
-            //    bad_obj = metatile.zoom() == 10 && num_objects == 39_469;
-            //}
-            //if let Geometry::MultiPolygon(_) = geom {
-            ////    //println!("Is mulitpolygon");
-            ////    //println!("Skipping multipolygon");
-            //    continue;
-            //}
+                if num_objects >= 1 {
+                    continue;
+                }
+                bad_obj = metatile.zoom() == 10 && num_objects == 39_469;
+            }
+            if let Geometry::MultiPolygon(_) = geom {
+            //    //println!("Is mulitpolygon");
+            //    //println!("Skipping multipolygon");
+                continue;
+            }
 
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
@@ -493,6 +494,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             if ! is_valid(&geom) {
                 continue;
             }
+
 
             // clip geometry, so no part of it goes outside the bbox. PostgreSQL will return
             // anything that overlaps.
@@ -533,6 +535,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }
             }
 
+
             // In cases where there is only one geometry here, we don't want to clone the
             // `properties`, and instead move it. If there are N geometries, we want to do N-1
             // clones, and 1 move. Hence the duplication with the loop.
@@ -542,13 +545,20 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // FIXME rather than filtering out invalid geoms here, prevent the clipping code from
             // generating invalid geoms in the first place
             // One error was creating a linestring with 2 points, both the same
+            let is_poly = if let Geometry::Polygon(_) = geom { true } else { false };
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
                     Some(mut g) => {
                         if is_valid(&g) {
+                            //if is_poly {
+                            //    println!("Poly is valid");
+                            //}
                             validity::ensure_polygon_orientation(&mut g);
                             Some((t, g))
                         } else {
+                            //if is_poly {
+                            //    println!("Poly not valid {:?}", g);
+                            //}
                             None
                         }
                     },
@@ -559,6 +569,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             loop {
                 if geoms.len() <= 1 { break; }
                 if let Some((tile, geom)) = geoms.pop() {
+                    //if let Geometry::Polygon(_) = geom {
+                    //    println!("line {} have poly", line!());
+                    //}
 
                     let i = (tile.x() - metatile.x()) as i64;
                     let j = (tile.y() - metatile.y()) as i64;
@@ -579,6 +592,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             if geoms.is_empty() { continue; }
             if let Some((tile, geom)) = geoms.pop() {
+                //if let Geometry::Polygon(_) = geom {
+                //    println!("line {} have poly", line!());
+                //}
                 let i = (tile.x() - metatile.x()) as i64;
                 let j = (tile.y() - metatile.y()) as i64;
 

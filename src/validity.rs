@@ -138,7 +138,8 @@ fn num_points_excl_duplicates<T: CoordinateType>(ls: &LineString<T>) -> usize {
 
 }
 
-pub fn remove_duplicate_points_linestring<T: CoordinateType>(ls: &mut LineString<T>) {
+pub fn remove_duplicate_points_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
+    //println!("\nls {:?}", ls);
     if ls.0.len() < 2 {
         return;
     }
@@ -151,6 +152,7 @@ pub fn remove_duplicate_points_linestring<T: CoordinateType>(ls: &mut LineString
         let mut last_keep = &ls.0[0];
 
         for (idx, point) in ls.0.iter().enumerate().skip(1) {
+            //println!("{} {} idx {} last_keep {:?}", file!(), line!(), idx, last_keep);
             if point == last_keep {
                 keeps[idx] = true;
                 last_keep = point;
@@ -163,10 +165,12 @@ pub fn remove_duplicate_points_linestring<T: CoordinateType>(ls: &mut LineString
         // nothing to do, so early return
         return;
     }
+    //println!("{} {} keeps {:?}", file!(), line!(), keeps);
 
     let new_points: Vec<Point<T>> = ls.0.drain(..).zip(keeps.into_iter()).filter_map(|(point, keep)| if keep { Some(point) } else { None }).collect();
 
     ::std::mem::replace(&mut ls.0, new_points);
+
 
     loop {
         let len = ls.0.len();
@@ -178,7 +182,7 @@ pub fn remove_duplicate_points_linestring<T: CoordinateType>(ls: &mut LineString
 }
 
 
-pub fn remove_duplicate_points<T: CoordinateType>(geom: &mut Geometry<T>) {
+pub fn remove_duplicate_points<T: CoordinateType+Debug>(geom: &mut Geometry<T>) {
     match *geom {
         Geometry::LineString(ref mut ls) => remove_duplicate_points_linestring(ls),
         Geometry::MultiLineString(ref mut mls) => {

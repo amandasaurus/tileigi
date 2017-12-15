@@ -499,10 +499,15 @@ pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i64>, buffer: i64) 
 
 pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i64>, buffer: i64) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
     // Simple approach for now
+    let is_poly = if let Geometry::Polygon(_) = geom { true } else { false };
     let mut res = slice_box(Cow::Owned(geom), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096, buffer);
+
 
     // TODO make the slice_box etc not produce geoms with this result
     for &mut (tile, ref mut geom_opt) in res.iter_mut() {
+        //if is_poly {
+        //    println!("{} line {} have poly {:?}", file!(), line!(), geom_opt);
+        //}
         if let &mut Some(ref mut geom) = geom_opt {
             remove_duplicate_points(geom);
         }
