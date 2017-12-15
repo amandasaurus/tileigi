@@ -153,7 +153,7 @@ pub fn remove_duplicate_points_linestring<T: CoordinateType+Debug>(ls: &mut Line
 
         for (idx, point) in ls.0.iter().enumerate().skip(1) {
             //println!("{} {} idx {} last_keep {:?}", file!(), line!(), idx, last_keep);
-            if point == last_keep {
+            if point != last_keep {
                 keeps[idx] = true;
                 last_keep = point;
                 num_to_keep += 1;
