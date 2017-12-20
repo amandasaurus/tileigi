@@ -492,7 +492,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
 
             // Simplification is done by rust-geo, so not our fault.
-            assert!(is_valid(&geom), "Geometry is invalid after simplification: {:?}", geom);
+            //assert!(is_valid(&geom), "Geometry is invalid after simplification: {:?}", geom);
             if ! is_valid(&geom) {
                 continue;
             }
@@ -507,7 +507,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 },
                 Some(g) => g,
             };
-            assert!(is_valid(&geom), "Geometry is invalid after clip_to_bbox: {:?}", geom);
+            //assert!(is_valid(&geom), "Geometry is invalid after clip_to_bbox: {:?}", geom);
                     
             let mut properties = mapbox_vector_tile::Properties::new();
 
@@ -552,7 +552,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
                     Some(mut g) => {
-                        assert!(is_valid(&g), "Geometry is invalid after clip_geometry_to_tiles: {:?}", g);
+                        //assert!(is_valid(&g), "Geometry is invalid after clip_geometry_to_tiles: {:?}", g);
                         if is_valid(&g) {
                             //if is_poly {
                             //    println!("Poly is valid");
@@ -582,7 +582,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                     // Here we convert it back to i32
                     let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
-                    assert!(is_valid(&geom), "Geometry is invalid after map_coord: {:?}", geom);
+                    //assert!(is_valid(&geom), "Geometry is invalid after map_coord: {:?}", geom);
 
                     if is_valid(&geom) {
 
@@ -606,7 +606,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 // Here we convert it back to i32
                 let mut geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
                 //validity::ensure_polygon_orientation(&mut geom);
-                assert!(is_valid(&geom), "Geometry is invalid after map_coord: {:?}", geom);
+                //assert!(is_valid(&geom), "Geometry is invalid after map_coord: {:?}", geom);
 
                 if is_valid(&geom) {
                     if bad_obj {
