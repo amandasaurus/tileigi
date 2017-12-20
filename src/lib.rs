@@ -15,13 +15,14 @@ extern crate num_traits;
 use std::fs::File;
 use std::fs;
 use std::io::prelude::*;
-use std::path::Path;
+use std::path::PathBuf;
 use std::collections::{HashSet, HashMap};
 use std::time::Instant;
 use std::borrow::{Cow, Borrow};
 
 use std::thread;
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, Sender};
+use std::sync::{Arc, Mutex};
 
 use yaml_rust::{YamlLoader, Yaml};
 
@@ -77,12 +78,14 @@ impl ConnectionPool {
 
 }
 
+#[derive(Clone)]
 pub struct Layers {
     layers: Vec<Layer>,
     global_maxzoom: u8,
     global_minzoom: u8,
 }
 
+#[derive(Clone)]
 struct Layer {
     minzoom: u8,
     maxzoom: u8,
@@ -208,22 +211,51 @@ fn scale_denominator_for_zoom(zoom: u8) -> &'static str {
     }
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool, compress: bool, metatile_scale: u8) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize) {
     let layers = Layers::from_file(filename);
-    let dest_dir = Path::new(dest_dir);
-    fs::create_dir_all(dest_dir).unwrap();
+    let dest_dir = PathBuf::from(dest_dir);
+    fs::create_dir_all(&dest_dir).unwrap();
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
 
-    let mut started_current_zoom: Option<Instant> = None;
-
-    write_tilejson(&layers, &connection_pool, dest_dir);
+    write_tilejson(&layers, &connection_pool, &dest_dir);
 
     let (printer_tx, printer_rx) = channel();
     let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
 
-    for metatile in MetatilesIterator::new_for_bbox_zoom(metatile_scale, bbox, min_zoom, max_zoom) {
-        if metatile.zoom() < min_zoom { continue; }
+    let mut metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, bbox, min_zoom, max_zoom);
+    let mut metatile_iterator = Arc::new(Mutex::new(metatile_iterator));
+
+    let mut workers = Vec::with_capacity(num_threads);
+    for _ in 0..num_threads {
+        // TODO do I need all these clones?
+        let my_connection_pool = ConnectionPool::new(layers.get_all_connections());
+        let my_printer_tx = printer_tx.clone();
+        let my_metatile_iterator = Arc::clone(&metatile_iterator);
+        let my_dest_dir = dest_dir.clone();
+        let my_layers = layers.clone();
+        let handle = thread::spawn(move || {
+            worker(my_printer_tx, my_metatile_iterator, &my_dest_dir, &my_connection_pool, &my_layers);
+        });
+        workers.push(handle);
+    }
+
+    for worker in workers {
+        worker.join().unwrap();
+    }
+
+    printer_tx.send(printer::PrinterMessage::Quit).unwrap();
+    printer_thread.join().unwrap();
+}
+
+fn worker(printer_tx: Sender<printer::PrinterMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, dest_dir: &PathBuf, connection_pool: &ConnectionPool, layers: &Layers) {
+    loop {
+        let metatile = metatile_iterator.lock().unwrap().next();
+        if let None = metatile {
+            // The iterator is finished.
+            break;
+        }
+        let metatile = metatile.unwrap();
 
         let tiles = single_metatile(&layers, &metatile, &connection_pool);
         let num_tiles = tiles.len();
@@ -241,11 +273,9 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
 
     }
 
-    printer_tx.send(printer::PrinterMessage::Quit).unwrap();
-    printer_thread.join().unwrap();
 }
 
-fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &Path) {
+fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &PathBuf) {
     let tilejson = json!({
         "tilejson": "2.2.0",
         "tiles": [
