@@ -20,6 +20,9 @@ use std::collections::{HashSet, HashMap};
 use std::time::Instant;
 use std::borrow::{Cow, Borrow};
 
+use std::thread;
+use std::sync::mpsc::channel;
+
 use yaml_rust::{YamlLoader, Yaml};
 
 use postgres::{Connection, TlsMode};
@@ -39,6 +42,8 @@ use clip::{clip_to_bbox,clip_geometry_to_tiles};
 
 mod validity;
 use validity::{is_valid, is_valid_skip_expensive};
+
+mod printer;
 
 pub struct ConnectionPool {
     connections: HashMap<ConnectParams, Connection>,
@@ -214,41 +219,16 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
 
     write_tilejson(&layers, &connection_pool, dest_dir);
 
-    let mut last_zoom = 255;
-    let mut num_tiles_done: u64 = 0;
-    let logging_freq: u32 = 4;
-    let log_every: u64 = 2u64.pow(logging_freq);
-    let mask: u64 = (1u64<<logging_freq) - 1;
+    let (printer_tx, printer_rx) = channel();
+    let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
+
     for metatile in MetatilesIterator::new_for_bbox_zoom(metatile_scale, bbox, min_zoom, max_zoom) {
         if metatile.zoom() < min_zoom { continue; }
 
-        if num_tiles_done & mask == 0 && num_tiles_done > 0 {
-            if let Some(t) = started_current_zoom {
-                let duration = duration_to_float_secs(&t.elapsed());
-                println!("    Zoom {:2}, done {:4} ({:3}*{}) metatiles in {:>8} ({:9.4} metatiles/sec, {:9.4} tiles/sec)", last_zoom, num_tiles_done, num_tiles_done>>logging_freq, log_every, fmt_duration(&t.elapsed()), (num_tiles_done as f64)/duration, (num_tiles_done*(metatile_scale as u64)) as f64/duration );
-            }
-        }
-        if metatile.zoom() != last_zoom {
-            if let Some(t) = started_current_zoom {
-                let duration = duration_to_float_secs(&t.elapsed());
-                println!("Zoom {:2}, {:4} metatile(s), done in {:>8} ({:9.4} metatiles/sec, {:9.4} tiles/sec)", last_zoom, num_tiles_done, fmt_duration(&t.elapsed()), (num_tiles_done as f64)/duration, (num_tiles_done*(metatile_scale as u64)) as f64/duration );
-            }
-            started_current_zoom = Some(Instant::now());
-            last_zoom = metatile.zoom();
-            num_tiles_done = 0;
-        }
-        if metatile.zoom() > max_zoom {
-            break;
-        }
-
-
         let tiles = single_metatile(&layers, &metatile, &connection_pool);
+        let num_tiles = tiles.len();
 
-        assert!(!if_not_exists);
         // FIXME the tile exists check needs to work with metatiles
-        //if if_not_exists && filename.exists() {
-        //    continue;
-        //}
 
         for (tile, pbf) in tiles.into_iter() {
             let filename = dest_dir.join(tile.ts_path("pbf"));
@@ -256,10 +236,13 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
 
             pbf.write_to_file(filename.to_str().unwrap());
         }
-        num_tiles_done += 1;
 
+        printer_tx.send(printer::PrinterMessage::DoneTiles(metatile.zoom(), 1, metatile.scale() as usize)).unwrap();
 
     }
+
+    printer_tx.send(printer::PrinterMessage::Quit).unwrap();
+    printer_thread.join().unwrap();
 }
 
 fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &Path) {
