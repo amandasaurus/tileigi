@@ -241,7 +241,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
     }
 
     for worker in workers {
-        worker.join().unwrap();
+        worker.join().ok();
     }
 
     printer_tx.send(printer::PrinterMessage::Quit).unwrap();
