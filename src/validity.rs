@@ -58,7 +58,6 @@ fn is_polygon_valid_skip_expensive<T: CoordinateType+Signed+Debug+Ord>(p: &Polyg
     }
     // TODO fix clipping code etc to not make linestrings with duplicated points
 
-
     if p.exterior.0.iter().skip(1).all(|&pt| pt == p.exterior.0[0]) {
         // All points the same
         // Shouldn't this be caught by the num_points_excl_duplicates ?

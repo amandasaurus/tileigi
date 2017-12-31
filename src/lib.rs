@@ -427,7 +427,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
         let mut num_objects = 0;
 
-        for (i, row) in res {
+        for (i, row) in res.take(5) {
             num_objects += 1;
 
 
@@ -445,22 +445,29 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             };
 
             let mut bad_obj = false;
-            //if let Geometry::Polygon(ref x) = geom {
-            //    continue;
-            ////    // at z10 southside dublin
-            ////    // 39_469 good
-            ////    // 39_470 bad
-            ////    // the bad obj is 39_469
-            //    if num_objects >= 1 {
-            //        continue;
-            //    }
-            //    bad_obj = metatile.zoom() == 10 && num_objects == 39_469;
-            //}
-            //if let Geometry::MultiPolygon(_) = geom {
-            ////    //println!("Is mulitpolygon");
-            ////    //println!("Skipping multipolygon");
-            //    continue;
-            //}
+            if let Geometry::LineString(ref x) = geom {
+                bad_obj = metatile.zoom() == 5;
+            } else {
+                //continue;
+            }
+
+            if let Geometry::Polygon(ref x) = geom {
+                continue;
+                //if num_objects >= usize.max_value() {
+                //    continue;
+                //}
+                //bad_obj = metatile.zoom() == 4 && num_objects == 39_469;
+            }
+            if let Geometry::MultiPolygon(_) = geom {
+                continue;
+                // 207 good
+                // 208 bad
+                // the bad obj is 207
+                //if num_objects >= 208 {
+                //    continue;
+                //}
+                //bad_obj = metatile.zoom() == 4 && num_objects == 207;
+            }
 
             // TODO not sure about this
             let pixel_size: f64 = tile_width/extent;
@@ -547,6 +554,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // generating invalid geoms in the first place
             // One error was creating a linestring with 2 points, both the same
             let is_poly = if let Geometry::Polygon(_) = geom { true } else { false };
+            //if bad_obj {
+            //    println!("\nL {} geom {:?}", line!(), geom);
+            //}
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
                     Some(mut g) => {
@@ -554,6 +564,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                         if is_valid(&g) {
                             //if is_poly {
                             //    println!("Poly is valid");
+                            //}
+                            //if bad_obj {
+                            //    println!("\nL {} geom {:?}", line!(), g);
                             //}
                             validity::ensure_polygon_orientation(&mut g);
                             Some((t, g))
@@ -583,6 +596,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     //assert!(is_valid(&geom), "Geometry is invalid after map_coord: {:?}", geom);
 
                     if is_valid(&geom) {
+                        if bad_obj {
+                            println!("\nL {} geom {:?}", line!(), geom);
+                        }
 
                         let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                         let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
@@ -608,7 +624,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                 if is_valid(&geom) {
                     if bad_obj {
-                        println!("geom {:?}", geom);
+                        println!("\nL {} geom {:?}", line!(), geom);
                     }
                     let feature = mapbox_vector_tile::Feature::new(geom, properties);
                     let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
