@@ -498,6 +498,8 @@ pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i32>, buffer: i32) 
 }
 
 pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i32>, buffer: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
+    // FIXME somehow in this method, it's making invalid polygons where the last point != first
+    // point
     // Simple approach for now
     let is_poly = if let Geometry::Polygon(_) = geom { true } else { false };
     let mut res = slice_box(Cow::Owned(geom), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i32*4096, buffer);
