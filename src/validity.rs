@@ -46,6 +46,11 @@ fn is_polygon_valid_skip_expensive<T: CoordinateType+Signed+Debug+Ord>(p: &Polyg
         return false;
     }
 
+    if p.exterior.0[0] != p.exterior.0[p.exterior.0.len()-1] {
+        // first != last point
+        return false;
+    }
+
     // Sometimes there are duplicate points, e.g. A-A-B-A. If we remove all dupes, we can see if
     // there are <4 points
     if num_points_excl_duplicates(&p.exterior) < 4 {
@@ -63,6 +68,11 @@ fn is_polygon_valid_skip_expensive<T: CoordinateType+Signed+Debug+Ord>(p: &Polyg
 
     for i in p.interiors.iter() {
         if num_points_excl_duplicates(i) < 4 {
+            return false;
+        }
+
+        if i.0[0] != i.0[i.0.len()-1] {
+            // first != last point
             return false;
         }
 
