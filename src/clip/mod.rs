@@ -348,7 +348,7 @@ pub fn clip_to_bbox<T: CoordinateType+::std::fmt::Debug>(geom: Cow<Geometry<T>>,
 /// tile_x0/tile_y0 - the x/y value of the top left tile of the metatile
 /// x0/y0 - The x/y value of the top left corner of the topleft tile. At the start this will be (0, 0)
 /// size - the width (& height) of the metatile. A regular tile is 4096. So a 2x2 is 8192 etc
-fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u32, tile_y0: u32, x0: i64, y0: i64, size: i64, buffer: i64) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+fn slice_box(geom: Cow<Geometry<i32>>, metatile_scale: u8, zoom: u8, tile_x0: u32, tile_y0: u32, x0: i32, y0: i32, size: i32, buffer: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
     if metatile_scale == 1 {
         return vec![(slippy_map_tiles::Tile::new(zoom, tile_x0, tile_y0).unwrap(), Some(geom.into_owned()))];
     }
@@ -358,8 +358,8 @@ fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u3
     let half = size / 2;
     let tile_half = (metatile_scale/2) as u32;
 
-    if let Some(left) = clip_to_border(Cow::Borrowed(geom.borrow()), &Border::XMax(x0+half+buffer as i64)) {
-        if let Some(topleft) = clip_to_border(Cow::Borrowed(&left), &Border::YMax(y0+half+buffer as i64)) {
+    if let Some(left) = clip_to_border(Cow::Borrowed(geom.borrow()), &Border::XMax(x0+half+buffer as i32)) {
+        if let Some(topleft) = clip_to_border(Cow::Borrowed(&left), &Border::YMax(y0+half+buffer as i32)) {
             let mut tiles = slice_box(Cow::Owned(topleft), metatile_scale/2, zoom, tile_x0, tile_y0, x0, y0, size/2, buffer);
             if metatile_scale == 2 {
                 // this is only one tile
@@ -373,7 +373,7 @@ fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u3
             }
         }
 
-        if let Some(bottomleft) = clip_to_border(Cow::Owned(left), &Border::YMin(y0+half-buffer as i64)) {
+        if let Some(bottomleft) = clip_to_border(Cow::Owned(left), &Border::YMin(y0+half-buffer as i32)) {
             let mut tiles = slice_box(Cow::Owned(bottomleft), metatile_scale/2, zoom, tile_x0, tile_y0+tile_half, x0, y0+half, size/2, buffer);
             if metatile_scale == 2 {
                 // this is only one tile
@@ -388,8 +388,8 @@ fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u3
         }
     }
 
-    if let Some(right) = clip_to_border(geom, &Border::XMin(x0+half-buffer as i64)) {
-        if let Some(topright) = clip_to_border(Cow::Borrowed(&right), &Border::YMax(y0+half+buffer as i64)) {
+    if let Some(right) = clip_to_border(geom, &Border::XMin(x0+half-buffer as i32)) {
+        if let Some(topright) = clip_to_border(Cow::Borrowed(&right), &Border::YMax(y0+half+buffer as i32)) {
             let mut tiles = slice_box(Cow::Owned(topright), metatile_scale/2, zoom, tile_x0+tile_half, tile_y0, x0+half, y0, size/2, buffer);
             if metatile_scale == 2 {
                 // this is only one tile
@@ -403,7 +403,7 @@ fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u3
             }
         }
 
-        if let Some(bottomright) = clip_to_border(Cow::Owned(right), &Border::YMin(y0+half-buffer as i64)) {
+        if let Some(bottomright) = clip_to_border(Cow::Owned(right), &Border::YMin(y0+half-buffer as i32)) {
             let mut tiles = slice_box(Cow::Owned(bottomright), metatile_scale/2, zoom, tile_x0+tile_half, tile_y0+tile_half, x0+half, y0+half, size/2, buffer);
             if metatile_scale == 2 {
                 // this is only one tile
@@ -421,9 +421,9 @@ fn slice_box(geom: Cow<Geometry<i64>>, metatile_scale: u8, zoom: u8, tile_x0: u3
     results
 }
 
-fn all_points_in_one_tile(metatile: &Metatile, ls: &LineString<i64>, buffer: i64) -> Option<(u32, u32)> {
+fn all_points_in_one_tile(metatile: &Metatile, ls: &LineString<i32>, buffer: i32) -> Option<(u32, u32)> {
     assert_eq!(buffer, 0);
-    let buffer = buffer as i64;
+    let buffer = buffer as i32;
 
     let initial_tile_x = ls.0[0].x() / 4096;
     let initial_tile_y = ls.0[0].y() / 4096;
@@ -448,7 +448,7 @@ fn all_points_in_one_tile(metatile: &Metatile, ls: &LineString<i64>, buffer: i64
     }
 }
 
-pub fn clip_linestring_to_tiles(metatile: &Metatile, mut ls: LineString<i64>, buffer: i64) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+pub fn clip_linestring_to_tiles(metatile: &Metatile, mut ls: LineString<i32>, buffer: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
     assert_eq!(buffer, 0);
     // Are all the points in the linestring in the same tile? If so, we can skip a lot of steps
     // FIXME this is not buffer aware.
@@ -459,7 +459,7 @@ pub fn clip_linestring_to_tiles(metatile: &Metatile, mut ls: LineString<i64>, bu
     match single_tile {
         None => {
             // Not all on one tile, so usual approach
-            slice_box(Cow::Owned(Geometry::LineString(ls)), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096, buffer)
+            slice_box(Cow::Owned(Geometry::LineString(ls)), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i32*4096, buffer)
         },
         Some((tile_x, tile_y)) => {
             if tile_x < size && tile_y < size {
@@ -467,14 +467,14 @@ pub fn clip_linestring_to_tiles(metatile: &Metatile, mut ls: LineString<i64>, bu
             } else {
                 // Dunno why
                 // FIXME why is this needed
-                slice_box(Cow::Owned(Geometry::LineString(ls)), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096, buffer)
+                slice_box(Cow::Owned(Geometry::LineString(ls)), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i32*4096, buffer)
             }
         },
     }
     
 }
 
-pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i64>, buffer: i64) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i32>, buffer: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
     // FIXME support buffer
     assert_eq!(buffer, 0);
     let metatile_scale = metatile.size() as u32;
@@ -497,10 +497,10 @@ pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i64>, buffer: i64) 
     }
 }
 
-pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i64>, buffer: i64) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i64>>)> {
+pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i32>, buffer: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
     // Simple approach for now
     let is_poly = if let Geometry::Polygon(_) = geom { true } else { false };
-    let mut res = slice_box(Cow::Owned(geom), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096, buffer);
+    let mut res = slice_box(Cow::Owned(geom), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i32*4096, buffer);
 
 
     // TODO make the slice_box etc not produce geoms with this result
@@ -520,6 +520,6 @@ pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i64>, buffer: 
     //match geom {
     //    Geometry::Point(p) => clip_point_to_tiles(metatile, p, buffer),
     //    Geometry::LineString(ls) => clip_linestring_to_tiles(metatile, ls, buffer),
-    //    _ => slice_box(Cow::Owned(geom), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i64*4096, buffer),
+    //    _ => slice_box(Cow::Owned(geom), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i32*4096, buffer),
     //}
 }
