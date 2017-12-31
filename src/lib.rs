@@ -45,6 +45,8 @@ mod validity;
 use validity::{is_valid, is_valid_skip_expensive};
 
 mod printer;
+mod simplify;
+
 
 pub struct ConnectionPool {
     connections: HashMap<ConnectParams, Connection>,
@@ -348,23 +350,6 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(St
         .collect()
 }
 
-fn simplify_geom(geom: Geometry<i64>, tolerance: i64) -> Geometry<i64> {
-    match geom {
-        // Can't simplify a Point. let's hope this doesn't do a copy or memory move or something
-        Geometry::Point(p) => Geometry::Point(p),
-        Geometry::MultiPoint(p) => Geometry::MultiPoint(p),
-
-        Geometry::LineString(p) => Geometry::LineString(p.simplify(&tolerance)),
-        Geometry::MultiLineString(p) => Geometry::MultiLineString(p.simplify(&tolerance)),
-        Geometry::Polygon(p) => Geometry::Polygon(p.simplify(&tolerance)),
-        Geometry::MultiPolygon(p) => Geometry::MultiPolygon(p.simplify(&tolerance)),
-
-        Geometry::GeometryCollection(_) => unimplemented!(),
-    }
-}
-
-
-
 pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool) -> Vec<(slippy_map_tiles::Tile, mapbox_vector_tile::Tile)> {
     let empty_tile = mapbox_vector_tile::Tile::new();
     let scale = metatile.size() as u32;
@@ -501,7 +486,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // will have less work to do.
 
             let simplification: i64 = if metatile.zoom() == layers.global_maxzoom { 1 } else { 8 };
-            let geom = simplify_geom(geom, simplification);
+            let geom = simplify::simplify(geom, simplification).unwrap();
 
 
             // Simplification is done by rust-geo, so not our fault.
@@ -686,6 +671,7 @@ fn remap_linestring(ls: LineString<f64>, minx: f64, maxx: f64, miny: f64, maxy: 
 }
 
 fn remap_geometry(geom: Geometry<f64>, minx: f64, maxx: f64, miny: f64, maxy: f64, size: f64) -> Option<Geometry<i64>> {
+    
     let remap_xy = |x: f64, y: f64| -> (i64, i64) {
         (
             (((x - minx) / (maxx - minx))*size).round() as i64,
