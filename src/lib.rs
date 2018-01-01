@@ -466,9 +466,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // overflows when simplifying, so initally convert it to i64, and then convert it back.
             // it's a little poor since there are duplicate data.
             // FIXME if this is a point, maybe don't do the double change.
-            // FIXME somewhere in remap it's setting x's well below 0 and making all the lines
-            // wrong, when they get clipped to the boundary
-            // FIXME FIXME FIXME
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
                 println!("\nL {} minx {} maxx {} miny {} maxy {} extent {}", line!(), minx, maxx, miny, maxy, extent);
@@ -618,7 +615,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                 // Here we convert it back to i32
                 let mut geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
-                //validity::ensure_polygon_orientation(&mut geom);
                 debug_assert!(is_valid(&geom), "Geometry is invalid after map_coord: {:?}", geom);
 
                 if is_valid(&geom) {
