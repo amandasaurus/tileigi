@@ -436,6 +436,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // TODO Does this do any copies that we don't want?
             let wkb_bytes: Vec<u8> = row.get(0);
 
+            //println!("\nL {} bytes {:?}", line!(), wkb_bytes);
+
             let geom: geo::Geometry<f64> = match wkb::wkb_to_geom(&mut wkb_bytes.as_slice()) {
                 Err(e) => {
                     // TODO investigate this more
@@ -449,25 +451,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             if let Geometry::LineString(ref x) = geom {
                 bad_obj = metatile.zoom() == 5;
             } else {
-                //continue;
+                continue;
             }
 
-            if let Geometry::Polygon(ref x) = geom {
-                continue;
-                //if num_objects >= usize.max_value() {
-                //    continue;
-                //}
-                //bad_obj = metatile.zoom() == 4 && num_objects == 39_469;
-            }
-            if let Geometry::MultiPolygon(_) = geom {
-                continue;
-                // 207 good
-                // 208 bad
-                // the bad obj is 207
-                //if num_objects >= 208 {
-                //    continue;
-                //}
-                //bad_obj = metatile.zoom() == 4 && num_objects == 207;
+            if bad_obj {
+                println!("\nL {} starting", line!());
             }
 
             // TODO not sure about this
@@ -480,9 +468,19 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // overflows when simplifying, so initally convert it to i64, and then convert it back.
             // it's a little poor since there are duplicate data.
             // FIXME if this is a point, maybe don't do the double change.
+            // FIXME somewhere in remap it's setting x's well below 0 and making all the lines
+            // wrong, when they get clipped to the boundary
+            // FIXME FIXME FIXME
+            if bad_obj {
+                println!("\nL {} geom {:?}", line!(), geom);
+                println!("\nL {} minx {} maxx {} miny {} maxy {} extent {}", line!(), minx, maxx, miny, maxy, extent);
+            }
             let mut geom = remap_geometry(geom, minx, maxx, miny, maxy, extent);
             if geom.is_none() { continue; }
             let mut geom = geom.unwrap();
+            if bad_obj {
+                println!("\nL {} geom {:?}", line!(), geom);
+            }
             validity::ensure_polygon_orientation(&mut geom);
             if ! is_valid_skip_expensive(&geom) {
                 continue;
@@ -495,6 +493,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             let simplification: i32 = if metatile.zoom() == layers.global_maxzoom { 1 } else { 8 };
             let geom = simplify::simplify(geom, simplification).unwrap();
+            if bad_obj {
+                println!("\nL {} geom {:?}", line!(), geom);
+            }
 
 
             // Simplification is done by rust-geo, so not our fault.
@@ -514,6 +515,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 Some(g) => g,
             };
             //assert!(is_valid(&geom), "Geometry is invalid after clip_to_bbox: {:?}", geom);
+            if bad_obj {
+                println!("\nL {} geom {:?}", line!(), geom);
+            }
                     
             let mut properties = mapbox_vector_tile::Properties::new();
 
@@ -545,6 +549,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }
             }
 
+            if bad_obj {
+                println!("\nL {} {} properties {:?}", line!(), layer_name, properties);
+            }
+
 
             // In cases where there is only one geometry here, we don't want to clone the
             // `properties`, and instead move it. If there are N geometries, we want to do N-1
@@ -556,17 +564,14 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // generating invalid geoms in the first place
             // One error was creating a linestring with 2 points, both the same
             let is_poly = if let Geometry::Polygon(_) = geom { true } else { false };
-            //if bad_obj {
-            //    println!("\nL {} geom {:?}", line!(), geom);
-            //}
+            if bad_obj {
+                println!("\nL {} geom {:?}", line!(), geom);
+            }
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
                     Some(mut g) => {
                         //assert!(is_valid(&g), "Geometry is invalid after clip_geometry_to_tiles: {:?}", g);
                         if is_valid(&g) {
-                            //if is_poly {
-                            //    println!("Poly is valid");
-                            //}
                             //if bad_obj {
                             //    println!("\nL {} geom {:?}", line!(), g);
                             //}
@@ -586,9 +591,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             loop {
                 if geoms.len() <= 1 { break; }
                 if let Some((tile, geom)) = geoms.pop() {
-                    //if let Geometry::Polygon(_) = geom {
-                    //    println!("line {} have poly", line!());
-                    //}
 
                     let i = (tile.x() - metatile.x()) as i32;
                     let j = (tile.y() - metatile.y()) as i32;
@@ -613,9 +615,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             if geoms.is_empty() { continue; }
             if let Some((tile, geom)) = geoms.pop() {
-                //if let Geometry::Polygon(_) = geom {
-                //    println!("line {} have poly", line!());
-                //}
                 let i = (tile.x() - metatile.x()) as i32;
                 let j = (tile.y() - metatile.y()) as i32;
 
