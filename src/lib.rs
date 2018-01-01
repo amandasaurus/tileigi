@@ -431,7 +431,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
         let mut num_objects = 0;
 
-        for (i, row) in res.take(5) {
+        for (i, row) in res {
             num_objects += 1;
 
 
