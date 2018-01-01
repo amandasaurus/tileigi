@@ -1,4 +1,4 @@
-#![allow(dead_code,unused_imports,unused_variables,unused_mut)]
+#![allow(dead_code,unused_imports,unused_variables,unused_mut,unused_assignments)]
 
 extern crate postgres;
 extern crate slippy_map_tiles;
