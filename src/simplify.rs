@@ -130,7 +130,7 @@ pub fn simplify(geom: Geometry<i32>, epsilon: i32) -> Option<Geometry<i32>> {
         Geometry::Point(p) => Some(Geometry::Point(p)),
         Geometry::MultiPoint(p) => Some(Geometry::MultiPoint(p)),
 
-        Geometry::LineString(ls) => simplify_linestring(ls, epsilon).map(|g| g.into()),
+        Geometry::LineString(ls) => simplify_linestring(ls, epsilon, false).map(|g| g.into()),
         Geometry::MultiLineString(mls) => simplify_multilinestring(mls, epsilon).map(|g| g.into()),
         Geometry::Polygon(p) => simplify_polygon(p, epsilon).map(|g| g.into()),
         Geometry::MultiPolygon(mp) => simplify_multipolygon(mp, epsilon).map(|g| g.into()),
@@ -139,21 +139,46 @@ pub fn simplify(geom: Geometry<i32>, epsilon: i32) -> Option<Geometry<i32>> {
     }
 }
 
-fn simplify_linestring(geom: LineString<i32>, epsilon: i32) -> Option<LineString<i32>> {
-    Some(LineString(rdp(&geom.0, epsilon)))
+fn simplify_linestring(geom: LineString<i32>, epsilon: i32, should_be_ring: bool) -> Option<LineString<i32>> {
+    let new_points = rdp(&geom.0, epsilon);
+
+    if should_be_ring {
+        if new_points.len() >= 4 && new_points[0] == new_points[new_points.len()-1] { 
+            Some(LineString(new_points))
+        } else {
+            None
+        }
+    } else {
+        if new_points.len() >= 2 {
+            Some(LineString(new_points))
+        } else {
+            None
+        }
+    }
 }
 
 fn simplify_multilinestring(geom: MultiLineString<i32>, epsilon: i32) -> Option<MultiLineString<i32>> {
-    Some(MultiLineString(geom.0.into_iter().filter_map(|l| simplify_linestring(l, epsilon)).collect()))
+    Some(MultiLineString(geom.0.into_iter().filter_map(|l| simplify_linestring(l, epsilon, false)).collect()))
 }
 
 fn simplify_polygon(geom: Polygon<i32>, epsilon: i32) -> Option<Polygon<i32>> {
     let Polygon{ exterior, interiors } = geom;
-    Some(Polygon::new(simplify_linestring(exterior, epsilon).unwrap(), interiors.into_iter().filter_map(|l| simplify_linestring(l, epsilon)).collect()))
+    match simplify_linestring(exterior, epsilon, true) {
+        None => None,
+        Some(new_exterior) => {
+            Some(Polygon::new(new_exterior, interiors.into_iter().filter_map(|l| simplify_linestring(l, epsilon, true)).collect()))
+        }
+    }
+
 }
 
 fn simplify_multipolygon(geom: MultiPolygon<i32>, epsilon: i32) -> Option<MultiPolygon<i32>> {
-    Some(MultiPolygon(geom.0.into_iter().filter_map(|p| simplify_polygon(p, epsilon)).collect()))
+    let new_polygons: Vec<_> = geom.0.into_iter().filter_map(|p| simplify_polygon(p, epsilon)).collect();
+    if new_polygons.is_empty() {
+        None
+    } else {
+        Some(MultiPolygon(new_polygons))
+    }
 }
 
 #[cfg(test)]

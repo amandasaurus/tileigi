@@ -32,7 +32,6 @@ use postgres::params::ConnectParams;
 use slippy_map_tiles::{BBox, Metatile, MetatilesIterator};
 
 use geo::*;
-use geo::algorithm::simplify::Simplify;
 use geo::algorithm::map_coords::MapCoords;
 use geo::algorithm::map_coords::MapCoordsInplace;
 use geo::algorithm::boundingbox::BoundingBox;
@@ -487,7 +486,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // will have less work to do.
 
             let simplification: i32 = if metatile.zoom() == layers.global_maxzoom { 1 } else { 8 };
-            let geom = simplify::simplify(geom, simplification).unwrap();
+            // The object might get simplified to nothing
+            let geom = match simplify::simplify(geom, simplification) {
+                None => { continue; },
+                Some(g) => g,
+            };
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
@@ -736,7 +739,7 @@ fn remap_geometry(geom: Geometry<f64>, minx: f64, maxx: f64, miny: f64, maxy: f6
         Geometry::Polygon(p) => {
             let Polygon{ exterior, interiors } = p;
             match remap_linestring(exterior, minx, maxx, miny, maxy, size, true) {
-                    // Exterior gets simplified away
+                // Exterior gets simplified away
                 None => None,
                 Some(exterior) => {
                     let interiors: Vec<LineString<_>> = interiors.into_iter().filter_map(|int| remap_linestring(int, minx, maxx, miny, maxy, size, true)).collect();
