@@ -451,11 +451,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             };
 
             let mut bad_obj = false;
-            if let Geometry::LineString(ref x) = geom {
-                bad_obj = metatile.zoom() == 5;
-            } else {
-                continue;
-            }
 
             if bad_obj {
                 println!("\nL {} starting", line!());
