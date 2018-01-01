@@ -132,7 +132,7 @@ impl Layers {
                 minzoom: layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(global_minzoom) as u8,
                 maxzoom: layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(global_maxzoom) as u8,
                 // FIXME buffer is making different layers offset at different amounts
-                buffer: 0, //layer["properties"]["buffer-size"].as_i64().map(|x| x as u16).unwrap_or(0) as u16,
+                buffer: layer["properties"]["buffer-size"].as_i64().map(|x| x as u16).unwrap_or(0) as u16,
                 table: layer["Datasource"]["table"].as_str().unwrap().to_owned(),
             })
             // FIXME finish this thing
@@ -393,12 +393,12 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         let buffer_width = (tile_width / canvas_size)*(buffer as f64);
         let buffer_height = (tile_height / canvas_size)*(buffer as f64);
 
-        let minx = ll.0 as f64 - buffer_width;
-        let miny = ll.1 as f64 - buffer_height;
-        let maxx = ur.0 as f64 + buffer_width;
-        let maxy = ur.1 as f64 + buffer_height;
+        let minx = ll.0 as f64; //- buffer_width;
+        let miny = ll.1 as f64; // - buffer_height;
+        let maxx = ur.0 as f64; // + buffer_width;
+        let maxy = ur.1 as f64; // + buffer_height;
 
-        let bbox = format!("ST_SetSRID(ST_MakeBox2D(ST_Point({llx}, {lly}), ST_Point({urx}, {ury})), 3857)", llx=minx, lly=miny, urx=maxx, ury=maxy);
+        let bbox = format!("ST_SetSRID(ST_MakeBox2D(ST_Point({llx}, {lly}), ST_Point({urx}, {ury})), 3857)", llx=(minx-buffer_width), lly=(miny-buffer_height), urx=(maxx+buffer_width), ury=(maxy+buffer_height));
         assert!(tile_height > 0.);
         assert!(tile_width > 0.);
 
