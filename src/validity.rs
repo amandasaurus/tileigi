@@ -154,7 +154,8 @@ pub fn remove_duplicate_points_linestring<T: CoordinateType+Debug>(ls: &mut Line
     }
 
     let mut keeps: Vec<bool> = vec![false; ls.0.len()];
-    let mut num_to_keep = 0;
+    keeps[0] = true;
+    let mut num_to_keep = 1;
 
     {
         // inner scope because we cause an immutable borrow with last_keep.
