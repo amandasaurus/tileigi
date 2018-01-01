@@ -650,10 +650,18 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 }
 
 fn remap_linestring(ls: LineString<f64>, minx: f64, maxx: f64, miny: f64, maxy: f64, size: f64, should_be_ring: bool) -> Option<LineString<i32>> {
+    fn conv(x: f64) -> i32 {
+        let x = x.round();
+        debug_assert!(x <= i32::max_value() as f64);
+        debug_assert!(x >= i32::min_value() as f64);
+
+        x as i32
+    }
+    
     let remap_xy = |x: f64, y: f64| -> (i32, i32) {
         (
-            (((x - minx) / (maxx - minx))*size).round() as i32,
-            (((maxy - y) / (maxy - miny))*size).round() as i32,
+            conv(((x - minx) / (maxx - minx))*size),
+            conv(((maxy - y) / (maxy - miny))*size)
         )
     };
 
@@ -689,11 +697,19 @@ fn remap_linestring(ls: LineString<f64>, minx: f64, maxx: f64, miny: f64, maxy: 
 }
 
 fn remap_geometry(geom: Geometry<f64>, minx: f64, maxx: f64, miny: f64, maxy: f64, size: f64) -> Option<Geometry<i32>> {
+
+    fn conv(x: f64) -> i32 {
+        let x = x.round();
+        debug_assert!(x <= i32::max_value() as f64);
+        debug_assert!(x >= i32::min_value() as f64);
+
+        x as i32
+    }
     
     let remap_xy = |x: f64, y: f64| -> (i32, i32) {
         (
-            (((x - minx) / (maxx - minx))*size).round() as i32,
-            (((maxy - y) / (maxy - miny))*size).round() as i32,
+            conv(((x - minx) / (maxx - minx))*size),
+            conv(((maxy - y) / (maxy - miny))*size)
         )
     };
 
