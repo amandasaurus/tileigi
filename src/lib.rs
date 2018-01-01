@@ -48,6 +48,9 @@ mod printer;
 mod simplify;
 
 
+#[cfg(test)]
+mod test;
+
 pub struct ConnectionPool {
     connections: HashMap<ConnectParams, Connection>,
     layer_to_param: HashMap<String, ConnectParams>,
