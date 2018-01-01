@@ -331,6 +331,7 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(St
                 "float8" => Some("Number".to_string()),
                 "text" => Some("String".to_string()),
                 "int4" => Some("Number".to_string()),
+                "int8" => Some("Number".to_string()),
                 "numeric" => Some("Number".to_string()),
                 
                 // why is there unknown?
@@ -525,6 +526,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     "float8" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Double)).unwrap_or(None),
                     "text" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::String)).unwrap_or(None),
                     "int4" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i32 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
+                    "int8" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i64 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
                     
                     // FIXME not 100% sure numeric is correct here
                     "numeric" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Double)).unwrap_or(None),
