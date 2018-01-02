@@ -16,7 +16,14 @@ fn main() {
         .arg(Arg::with_name("dest_dir").long("dest").takes_value(true).required(true))
         .arg(Arg::with_name("minzoom").long("minzoom").default_value("0"))
         .arg(Arg::with_name("maxzoom").long("maxzoom").default_value("14"))
-        .arg(Arg::with_name("bbox").long("bbox").default_value("90,-180,-90,180"))
+
+        .arg(Arg::with_name("bbox").long("bbox").default_value("90,-180,-90,180").conflicts_with_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]))
+
+        .arg(Arg::with_name("bbox-bottom").long("bbox-bottom").default_value("-90").conflicts_with("bbox").requires_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]))
+        .arg(Arg::with_name("bbox-top").long("bbox-top").default_value("-90").conflicts_with("bbox").requires_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]))
+        .arg(Arg::with_name("bbox-left").long("bbox-left").default_value("-180").conflicts_with("bbox").requires_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]))
+        .arg(Arg::with_name("bbox-right").long("bbox-right").default_value("180").conflicts_with("bbox").requires_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]))
+
         .arg(Arg::with_name("if_not_exists").long("if-not-exists"))
         .arg(Arg::with_name("no_compress").long("no-compress"))
         .arg(Arg::with_name("metatile-scale").long("metatile-scale").default_value("8"))
