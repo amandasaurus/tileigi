@@ -461,10 +461,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // TODO there are a lot of calls to `is_valid`, which is computationally expensive, but
             // removing them makes it slower, probably because of the lots of invalid geoms
 
-            // Convert to integer geom. MVT tiles have integers in i32, but I am getting i32
-            // overflows when simplifying, so initally convert it to i64, and then convert it back.
-            // it's a little poor since there are duplicate data.
-            // FIXME if this is a point, maybe don't do the double change.
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
                 println!("\nL {} minx {} maxx {} miny {} maxy {} extent {}", line!(), minx, maxx, miny, maxy, extent);
