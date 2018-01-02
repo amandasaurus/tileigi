@@ -322,6 +322,7 @@ fn intersect_excl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y
 #[cfg(test)]
 mod test {
     use super::*;
+    use super::super::validity::is_valid;
 
     //#[test]
     //fn intersect1() {
@@ -334,6 +335,13 @@ mod test {
     //    assert!(intersect_excl_end((-5, 5), (5, 5), (0, 0), (0, 10)));
 
     //}
+    
+    #[test]
+    fn remove_duplicate_points_valid() {
+        let mut geom = Geometry::LineString(LineString(vec![Point(Coordinate { x: 31565, y: 20875 }), Point(Coordinate { x: 31615, y: 20887 }), Point(Coordinate { x: 31633, y: 20819 }), Point(Coordinate { x: 31593, y: 20822 }), Point(Coordinate { x: 31585, y: 20808 }), Point(Coordinate { x: 31584, y: 20850 }), Point(Coordinate { x: 31565, y: 20875 })]));
+        remove_duplicate_points(&mut geom);
+        assert!(is_valid(&geom), "Invalid geometry {:?}", geom);
+    }
 
 
 }
