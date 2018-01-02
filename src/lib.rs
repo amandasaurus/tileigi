@@ -472,6 +472,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let mut geom = remap_geometry(geom, minx, maxx, miny, maxy, extent);
             if geom.is_none() { continue; }
             let mut geom = geom.unwrap();
+            simplify::remove_unneeded_points(&mut geom);
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }

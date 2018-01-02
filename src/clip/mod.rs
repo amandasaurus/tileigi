@@ -14,7 +14,7 @@ use geo::algorithm::map_coords::MapCoordsInplace;
 use geo::algorithm::boundingbox::BoundingBox;
 use geo::algorithm::contains::Contains;
 
-use ::validity::remove_duplicate_points;
+use ::simplify::remove_duplicate_points;
 
 // local stuff
 mod cohen_sutherland;

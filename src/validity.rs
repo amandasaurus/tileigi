@@ -147,77 +147,8 @@ fn num_points_excl_duplicates<T: CoordinateType>(ls: &LineString<T>) -> usize {
 
 }
 
-pub fn remove_duplicate_points_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
-    //println!("\nls {:?}", ls);
-    if ls.0.len() < 2 {
-        return;
-    }
-
-    let mut keeps: Vec<bool> = vec![false; ls.0.len()];
-    keeps[0] = true;
-    let mut num_to_keep = 1;
-
-    {
-        // inner scope because we cause an immutable borrow with last_keep.
-        let mut last_keep = &ls.0[0];
-
-        for (idx, point) in ls.0.iter().enumerate().skip(1) {
-            //println!("{} {} idx {} last_keep {:?}", file!(), line!(), idx, last_keep);
-            if point != last_keep {
-                keeps[idx] = true;
-                last_keep = point;
-                num_to_keep += 1;
-            }
-        }
-    }
-
-    if num_to_keep == ls.0.len() {
-        // nothing to do, so early return
-        return;
-    }
-    //println!("{} {} keeps {:?}", file!(), line!(), keeps);
-
-    let new_points: Vec<Point<T>> = ls.0.drain(..).zip(keeps.into_iter()).filter_map(|(point, keep)| if keep { Some(point) } else { None }).collect();
-    //println!("{} {} new_points {:?}", file!(), line!(), new_points);
-
-    ::std::mem::replace(&mut ls.0, new_points);
 
 
-    loop {
-        let len = ls.0.len();
-        if len <= 2 { break; }
-        if ls.0[len-1] != ls.0[len-2] { break; }
-        // the last point is duplicated from the 2nd last
-        ls.0.remove(len-1);
-    }
-}
-
-
-pub fn remove_duplicate_points<T: CoordinateType+Debug>(geom: &mut Geometry<T>) {
-    match *geom {
-        Geometry::LineString(ref mut ls) => remove_duplicate_points_linestring(ls),
-        Geometry::MultiLineString(ref mut mls) => {
-            for mut ls in mls.0.iter_mut() {
-                remove_duplicate_points_linestring(&mut ls);
-            }
-        },
-        Geometry::Polygon(ref mut p) => {
-            remove_duplicate_points_linestring(&mut p.exterior);
-            for mut i in p.interiors.iter_mut() {
-                remove_duplicate_points_linestring(&mut i);
-            }
-            },
-        Geometry::MultiPolygon(ref mut mp) => {
-            for mut p in mp.0.iter_mut() {
-                remove_duplicate_points_linestring(&mut p.exterior);
-                for mut i in p.interiors.iter_mut() {
-                    remove_duplicate_points_linestring(&mut i);
-                }
-            }
-        }
-        _ => {},
-    }
-}
 
 pub fn ensure_polygon_orientation<T: CoordinateType>(geom: &mut Geometry<T>) {
     match *geom {
@@ -338,13 +269,5 @@ mod test {
 
     //}
     
-    #[test]
-    fn remove_duplicate_points_valid() {
-        let mut geom = Geometry::LineString(LineString(vec![Point(Coordinate { x: 31565, y: 20875 }), Point(Coordinate { x: 31615, y: 20887 }), Point(Coordinate { x: 31633, y: 20819 }), Point(Coordinate { x: 31593, y: 20822 }), Point(Coordinate { x: 31585, y: 20808 }), Point(Coordinate { x: 31584, y: 20850 }), Point(Coordinate { x: 31565, y: 20875 })]));
-        remove_duplicate_points(&mut geom);
-        assert!(is_valid(&geom), "Invalid geometry {:?}", geom);
-    }
-
-
 }
 
