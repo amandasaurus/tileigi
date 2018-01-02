@@ -568,15 +568,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     Some(mut g) => {
                         debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
                         if is_valid(&g) {
-                            //if bad_obj {
-                            //    println!("\nL {} geom {:?}", line!(), g);
-                            //}
                             validity::ensure_polygon_orientation(&mut g);
                             Some((t, g))
                         } else {
-                            //if is_poly {
-                            //    println!("Poly not valid {:?}", g);
-                            //}
                             None
                         }
                     },
