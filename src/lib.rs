@@ -392,10 +392,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         let buffer_width = (tile_width / canvas_size)*(buffer as f64);
         let buffer_height = (tile_height / canvas_size)*(buffer as f64);
 
-        let minx = ll.0 as f64; //- buffer_width;
-        let miny = ll.1 as f64; // - buffer_height;
-        let maxx = ur.0 as f64; // + buffer_width;
-        let maxy = ur.1 as f64; // + buffer_height;
+        let minx = ll.0 as f64;
+        let miny = ll.1 as f64;
+        let maxx = ur.0 as f64;
+        let maxy = ur.1 as f64;
 
         let bbox = format!("ST_SetSRID(ST_MakeBox2D(ST_Point({llx}, {lly}), ST_Point({urx}, {ury})), 3857)", llx=(minx-buffer_width), lly=(miny-buffer_height), urx=(maxx+buffer_width), ury=(maxy+buffer_height));
         assert!(tile_height > 0.);
