@@ -487,6 +487,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             let simplification: i32 = if metatile.zoom() == layers.global_maxzoom { 1 } else { 8 };
             // The object might get simplified to nothing
+            //println!("geom pre simp {:?}", geom);
+            //debug_assert!(is_valid(&geom), "Geometry is invalid before simplification: {:?}", geom);
             let geom = match simplify::simplify(geom, simplification) {
                 None => { continue; },
                 Some(g) => g,
@@ -565,6 +567,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
+            //println!("\nL {} geom {:?}\nmetatile {:?}\nbuffer {}", line!(), geom, metatile, buffer);
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
                     Some(mut g) => {

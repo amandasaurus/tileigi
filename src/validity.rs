@@ -178,6 +178,7 @@ pub fn remove_duplicate_points_linestring<T: CoordinateType+Debug>(ls: &mut Line
     //println!("{} {} keeps {:?}", file!(), line!(), keeps);
 
     let new_points: Vec<Point<T>> = ls.0.drain(..).zip(keeps.into_iter()).filter_map(|(point, keep)| if keep { Some(point) } else { None }).collect();
+    //println!("{} {} new_points {:?}", file!(), line!(), new_points);
 
     ::std::mem::replace(&mut ls.0, new_points);
 
@@ -255,6 +256,7 @@ fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>
             let (p3, p4) = (points34[0], points34[1]);
 
             if intersect_excl_end(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y(), p4.x(), p4.y()) {
+                //println!("\n\nintersection i {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, p1, p2, p3, p4);
                 return true;
             }
         }
