@@ -486,9 +486,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // will have less work to do.
 
             let simplification: i32 = if metatile.zoom() == layers.global_maxzoom { 1 } else { 8 };
-            // The object might get simplified to nothing
-            //println!("geom pre simp {:?}", geom);
-            //debug_assert!(is_valid(&geom), "Geometry is invalid before simplification: {:?}", geom);
             let geom = match simplify::simplify(geom, simplification) {
                 None => { continue; },
                 Some(g) => g,
@@ -497,13 +494,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 println!("\nL {} geom {:?}", line!(), geom);
             }
 
-
-            // Simplification is done by rust-geo, so not our fault.
-            debug_assert!(is_valid(&geom), "Geometry is invalid after simplification: {:?}", geom);
+            // After simplifying a geometry, it's possible it becomes invalid. So we just skip the
+            // geometries in that case.
             if ! is_valid(&geom) {
                 continue;
             }
-
 
             // clip geometry, so no part of it goes outside the bbox. PostgreSQL will return
             // anything that overlaps.
@@ -514,7 +509,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 },
                 Some(g) => g,
             };
-            debug_assert!(is_valid(&geom), "Geometry is invalid after clip_to_bbox: {:?}", geom);
+            debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:?}", line!(), geom);
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
@@ -571,7 +566,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
                     Some(mut g) => {
-                        debug_assert!(is_valid(&g), "Geometry is invalid after clip_geometry_to_tiles: {:?}", g);
+                        debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
                         if is_valid(&g) {
                             //if bad_obj {
                             //    println!("\nL {} geom {:?}", line!(), g);
@@ -598,7 +593,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                     // Here we convert it back to i32
                     let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
-                    debug_assert!(is_valid(&geom), "Geometry is invalid after map_coord: {:?}", geom);
+                    debug_assert!(is_valid(&geom), "L {} Geometry is invalid after map_coord: {:?}", line!(), geom);
 
                     if is_valid(&geom) {
                         if bad_obj {
@@ -621,7 +616,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                 // Here we convert it back to i32
                 let mut geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
-                debug_assert!(is_valid(&geom), "Geometry is invalid after map_coord: {:?}", geom);
+                debug_assert!(is_valid(&geom), "L {} Geometry is invalid after map_coord: {:?}", line!(), geom);
 
                 if is_valid(&geom) {
                     if bad_obj {
