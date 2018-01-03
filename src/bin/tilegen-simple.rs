@@ -17,7 +17,7 @@ fn main() {
         .arg(Arg::with_name("minzoom").long("minzoom").default_value("0"))
         .arg(Arg::with_name("maxzoom").long("maxzoom").default_value("14"))
 
-        .arg(Arg::with_name("bbox").long("bbox").default_value("90,-180,-90,180").conflicts_with_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]))
+        .arg(Arg::with_name("bbox").long("bbox").default_value("planet").conflicts_with_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]))
 
         .arg(Arg::with_name("bbox-bottom").long("bbox-bottom").conflicts_with("bbox").requires_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]))
         .arg(Arg::with_name("bbox-top").long("bbox-top").conflicts_with("bbox").requires_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]))
@@ -39,7 +39,11 @@ fn main() {
     let metatile_scale: u8 = matches.value_of("metatile-scale").unwrap().parse().unwrap();
     let num_threads: usize = matches.value_of("threads").unwrap().parse().unwrap();
 
-    let bbox = BBox::new_from_string(matches.value_of("bbox").expect("bbox not provided")).expect("Invalid bbox");
+    let bbox: Option<BBox> = match matches.value_of("bbox") {
+        Some("planet") => None,
+        Some(bbox_string) => Some(BBox::new_from_string(bbox_string).expect("Invalid bbox")),
+        None => unreachable!(),
+    };
 
     generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest_dir, if_not_exists, compress, metatile_scale, num_threads);
 }

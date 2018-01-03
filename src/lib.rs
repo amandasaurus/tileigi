@@ -215,7 +215,7 @@ fn scale_denominator_for_zoom(zoom: u8) -> &'static str {
     }
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, dest_dir: &str, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest_dir: &str, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize) {
     let layers = Layers::from_file(filename);
     let dest_dir = PathBuf::from(dest_dir);
     fs::create_dir_all(&dest_dir).unwrap();
@@ -227,7 +227,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &BBox, des
     let (printer_tx, printer_rx) = channel();
     let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
 
-    let mut metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, bbox, min_zoom, max_zoom);
+    let mut metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, &bbox, min_zoom, max_zoom);
     let mut metatile_iterator = Arc::new(Mutex::new(metatile_iterator));
 
     let mut workers = Vec::with_capacity(num_threads);
