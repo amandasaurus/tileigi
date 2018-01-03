@@ -44,7 +44,10 @@ mod validity;
 use validity::{is_valid, is_valid_skip_expensive};
 
 mod printer;
+mod fileio;
 mod simplify;
+
+use fileio::FileIOMessage;
 
 
 #[cfg(test)]
@@ -227,6 +230,10 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     let (printer_tx, printer_rx) = channel();
     let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
 
+    let (fileio_tx, fileio_rx) = channel();
+    let tile_dest = fileio::TileStashDirectory::new(&dest_dir);
+    let mut fileio_thread = thread::spawn(move || { fileio::fileio_thread(fileio_rx, tile_dest) });
+
     let mut metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, &bbox, min_zoom, max_zoom);
     let mut metatile_iterator = Arc::new(Mutex::new(metatile_iterator));
 
@@ -235,11 +242,11 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
         // TODO do I need all these clones?
         let my_connection_pool = ConnectionPool::new(layers.get_all_connections());
         let my_printer_tx = printer_tx.clone();
+        let my_fileio_tx = fileio_tx.clone();
         let my_metatile_iterator = Arc::clone(&metatile_iterator);
-        let my_dest_dir = dest_dir.clone();
         let my_layers = layers.clone();
         let handle = thread::spawn(move || {
-            worker(my_printer_tx, my_metatile_iterator, &my_dest_dir, &my_connection_pool, &my_layers);
+            worker(my_printer_tx, my_fileio_tx, my_metatile_iterator, &my_connection_pool, &my_layers);
         });
         workers.push(handle);
     }
@@ -248,11 +255,14 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
         worker.join().ok();
     }
 
+    fileio_tx.send(FileIOMessage::Quit).unwrap();
+    fileio_thread.join().unwrap();
+
     printer_tx.send(printer::PrinterMessage::Quit).unwrap();
     printer_thread.join().unwrap();
 }
 
-fn worker(printer_tx: Sender<printer::PrinterMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, dest_dir: &PathBuf, connection_pool: &ConnectionPool, layers: &Layers) {
+fn worker(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: Sender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, connection_pool: &ConnectionPool, layers: &Layers) {
     loop {
         let metatile = metatile_iterator.lock().unwrap().next();
         if let None = metatile {
@@ -267,10 +277,8 @@ fn worker(printer_tx: Sender<printer::PrinterMessage>, mut metatile_iterator: Ar
         // FIXME the tile exists check needs to work with metatiles
 
         for (tile, pbf) in tiles.into_iter() {
-            let filename = dest_dir.join(tile.ts_path("pbf"));
-            fs::create_dir_all(filename.parent().unwrap()).unwrap();
-
-            pbf.write_to_file(filename.to_str().unwrap());
+            let bytes = pbf.to_compressed_bytes();
+            fileio_tx.send(FileIOMessage::SaveTile(tile, bytes)).unwrap();
         }
 
         printer_tx.send(printer::PrinterMessage::DoneTiles(metatile.zoom(), 1, metatile.scale() as usize)).unwrap();
