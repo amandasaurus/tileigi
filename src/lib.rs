@@ -473,9 +473,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 println!("\nL {} geom {:?}", line!(), geom);
             }
             validity::ensure_polygon_orientation(&mut geom);
-            if ! is_valid_skip_expensive(&geom) {
-                continue;
-            }
+            //if ! is_valid_skip_expensive(&geom) {
+            //    continue;
+            //}
 
             // TODO after converting to integer, maybe run a simple algorithm that removes points
             // which are on the line, i.e. A-B-C is straight line, so remove B. This keeps the
@@ -490,12 +490,12 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
-
+            
             // After simplifying a geometry, it's possible it becomes invalid. So we just skip the
             // geometries in that case.
-            if ! is_valid(&geom) {
-                continue;
-            }
+            //if ! is_valid(&geom) {
+            //    continue;
+            //}
 
             // clip geometry, so no part of it goes outside the bbox. PostgreSQL will return
             // anything that overlaps.
