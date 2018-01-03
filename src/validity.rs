@@ -255,7 +255,6 @@ fn intersect_excl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y
 #[cfg(test)]
 mod test {
     use super::*;
-    use super::super::validity::is_valid;
 
     //#[test]
     //fn intersect1() {
