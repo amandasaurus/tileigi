@@ -11,6 +11,8 @@ extern crate serde_json;
 
 extern crate users;
 extern crate num_traits;
+extern crate rusqlite;
+extern crate md5;
 
 use std::fs::File;
 use std::fs;
@@ -49,9 +51,13 @@ mod simplify;
 
 use fileio::FileIOMessage;
 
-
 #[cfg(test)]
 mod test;
+
+pub enum TileDestinationType {
+    TileStashDirectory(String),
+    MBTiles(String),
+}
 
 pub struct ConnectionPool {
     connections: HashMap<ConnectParams, Connection>,
@@ -218,21 +224,28 @@ fn scale_denominator_for_zoom(zoom: u8) -> &'static str {
     }
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest_dir: &str, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize) {
     let layers = Layers::from_file(filename);
-    let dest_dir = PathBuf::from(dest_dir);
-    fs::create_dir_all(&dest_dir).unwrap();
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
 
-    write_tilejson(&layers, &connection_pool, &dest_dir);
+    //write_tilejson(&layers, &connection_pool, &dest_dir);
 
     let (printer_tx, printer_rx) = channel();
     let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
 
     let (fileio_tx, fileio_rx) = channel();
-    let tile_dest = fileio::TileStashDirectory::new(&dest_dir);
-    let mut fileio_thread = thread::spawn(move || { fileio::fileio_thread(fileio_rx, tile_dest) });
+
+    let mut fileio_thread = match dest {
+        &TileDestinationType::TileStashDirectory(ref path) => {
+            let tile_dest = fileio::TileStashDirectory::new(&PathBuf::from(path));
+            thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
+        },
+        &TileDestinationType::MBTiles(ref path) => {
+            let tile_dest = fileio::MBTiles::new(&PathBuf::from(path));
+            thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
+        },
+    };
 
     let mut metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, &bbox, min_zoom, max_zoom);
     let mut metatile_iterator = Arc::new(Mutex::new(metatile_iterator));

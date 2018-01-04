@@ -13,7 +13,10 @@ fn main() {
     let matches = App::new("test")
         .setting(AppSettings::AllowLeadingHyphen)
         .arg(Arg::with_name("data_yml").long("data-yml").takes_value(true).required(true))
-        .arg(Arg::with_name("dest_dir").long("dest").takes_value(true).required(true))
+
+        .arg(Arg::with_name("dest_dir").long("dest-dir").takes_value(true).conflicts_with("dest-mbtiles"))
+        .arg(Arg::with_name("dest_mbtiles").long("dest-mbtiles").takes_value(true).conflicts_with("dest_dir"))
+
         .arg(Arg::with_name("minzoom").long("minzoom").default_value("0"))
         .arg(Arg::with_name("maxzoom").long("maxzoom").default_value("14"))
 
@@ -31,7 +34,14 @@ fn main() {
         .get_matches();
 
     let data_yml = matches.value_of("data_yml").unwrap();
-    let dest_dir = matches.value_of("dest_dir").unwrap();
+
+    let dest = match (matches.value_of("dest_dir"), matches.value_of("dest_mbtiles")) {
+        (Some(dest_dir), None) => TileDestinationType::TileStashDirectory(dest_dir.to_string()),
+        (None, Some(mbtiles_filename)) => TileDestinationType::MBTiles(mbtiles_filename.to_string()),
+        (None, None) => panic!("Must provide a destination"),
+        (Some(_), Some(_)) => panic!("Cannot provide both dest"),
+    };
+
     let minzoom: u8 = matches.value_of("minzoom").unwrap().parse().unwrap();
     let maxzoom: u8 = matches.value_of("maxzoom").unwrap().parse().unwrap();
     let if_not_exists = matches.is_present("if_not_exists");
@@ -45,5 +55,5 @@ fn main() {
         None => unreachable!(),
     };
 
-    generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest_dir, if_not_exists, compress, metatile_scale, num_threads);
+    generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads);
 }
