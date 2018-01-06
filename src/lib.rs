@@ -596,49 +596,36 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }).collect();
             geoms.reverse();
 
-            loop {
-                if geoms.len() <= 1 { break; }
-                if let Some((tile, geom)) = geoms.pop() {
+            let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>| {
 
-                    let i = (tile.x() - metatile.x()) as i32;
-                    let j = (tile.y() - metatile.y()) as i32;
-
-                    // Here we convert it back to i32
-                    let geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
-                    debug_assert!(is_valid(&geom), "L {} Geometry is invalid after map_coord: {:?}", line!(), geom);
-
-                    if is_valid(&geom) {
-                        if bad_obj {
-                            println!("\nL {} geom {:?}", line!(), geom);
-                        }
-
-                        let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
-                        let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
-                        let mvt_tile = results.get_mut(i).unwrap();
-                        mvt_tile.add_feature(&layer_name, feature);
-
-                    }
-                }
-            }
-
-            if geoms.is_empty() { continue; }
-            if let Some((tile, geom)) = geoms.pop() {
                 let i = (tile.x() - metatile.x()) as i32;
                 let j = (tile.y() - metatile.y()) as i32;
 
-                // Here we convert it back to i32
-                let mut geom: Geometry<i32> = geom.map_coords(&|&(x, y)| ( (x - (4096*i)) as i32, (y - (4096*j)) as i32 ));
-                debug_assert!(is_valid(&geom), "L {} Geometry is invalid after map_coord: {:?}", line!(), geom);
+                geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
 
                 if is_valid(&geom) {
                     if bad_obj {
                         println!("\nL {} geom {:?}", line!(), geom);
                     }
-                    let feature = mapbox_vector_tile::Feature::new(geom, properties);
+
+                    let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                     let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
                     let mvt_tile = results.get_mut(i).unwrap();
                     mvt_tile.add_feature(&layer_name, feature);
+
                 }
+            };
+
+            loop {
+                if geoms.len() <= 1 { break; }
+                if let Some((tile, geom)) = geoms.pop() {
+                    save_single_tile(tile, geom);
+                }
+            }
+
+            if geoms.is_empty() { continue; }
+            if let Some((tile, geom)) = geoms.pop() {
+                save_single_tile(tile, geom);
             }
 
         }
