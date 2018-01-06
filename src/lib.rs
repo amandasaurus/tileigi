@@ -498,7 +498,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
-            validity::ensure_polygon_orientation(&mut geom);
+            //validity::ensure_polygon_orientation(&mut geom);
             //if ! is_valid_skip_expensive(&geom) {
             //    continue;
             //}
@@ -608,6 +608,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                 geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
 
+                validity::ensure_polygon_orientation(&mut geom);
                 if is_valid(&geom) {
                     if bad_obj {
                         println!("\nL {} geom {:?}", line!(), geom);
