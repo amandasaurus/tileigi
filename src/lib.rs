@@ -269,6 +269,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     }
 
     for worker in workers {
+        // If one of our worker threads has panic'ed, then this main programme should fail too
         worker.join().ok();
     }
 
