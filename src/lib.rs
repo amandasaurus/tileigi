@@ -513,9 +513,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 None => { continue; },
                 Some(g) => g,
             };
-            if bad_obj {
-                println!("\nL {} geom {:?}", line!(), geom);
-            }
+            //if bad_obj {
+            //    println!("\nL {} geom {:?}", line!(), geom);
+            //}
             
             // After simplifying a geometry, it's possible it becomes invalid. So we just skip the
             // geometries in that case.
@@ -532,7 +532,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 },
                 Some(g) => g,
             };
-            debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:?}", line!(), geom);
+            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:?}", line!(), geom);
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
@@ -589,7 +589,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
                     Some(mut g) => {
-                        debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
+                        //debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
                         if is_valid(&g) {
                             validity::ensure_polygon_orientation(&mut g);
                             Some((t, g))
