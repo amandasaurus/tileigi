@@ -238,6 +238,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     let mut fileio_thread = match dest {
         &TileDestinationType::TileStashDirectory(ref path) => {
             let path = PathBuf::from(path);
+            fs::create_dir_all(&path).unwrap();
             write_tilejson(&layers, &connection_pool, &path);
             let tile_dest = fileio::TileStashDirectory::new(&path);
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
