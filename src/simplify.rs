@@ -98,34 +98,61 @@ fn point_line_distance_sqr(point: &Point<i32>, start: &Point<i32>, end: &Point<i
 }
 
 // Ramer–Douglas-Peucker line simplification algorithm
-fn rdp(points: &[Point<i32>], epsilon: i32) -> Vec<Point<i32>>
+fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>>
 {
-    if points.is_empty() {
-        return points.to_vec();
+    let initial_num_points = points.len();
+    if points.is_empty() || points.len() <= 2 {
+        return points;
     }
-    let mut dmax_sqr: Fraction<i64> = Fraction::new(0, 1);
-    let mut index: usize = 0;
-    let mut distance_sqr: Fraction<i64>;
 
-    for (i, _) in points.iter().enumerate().take(points.len() - 1).skip(1) {
-        distance_sqr = point_line_distance_sqr(&points[i],
-                                       &points[0],
-                                       &*points.last().unwrap());
-        if distance_sqr > dmax_sqr {
-            index = i;
-            dmax_sqr = distance_sqr;
-        }
-    }
+    let mut points_to_keep: Vec<bool> = vec![true; points.len()];
+    let mut num_points_to_keep = points.len();
+    let mut segments_to_look_at: Vec<(usize, usize)> = vec![];
+
+    segments_to_look_at.push((0, points.len()-1));
+
     let e = epsilon as i64;
     let e = Fraction::new(e*e, 1);
-    if dmax_sqr > e {
-        let mut intermediate = rdp(&points[..index + 1], epsilon);
-        intermediate.pop();
-        intermediate.extend_from_slice(&rdp(&points[index..], epsilon));
-        intermediate
-    } else {
-        vec![*points.first().unwrap(), *points.last().unwrap()]
+
+    loop {
+        if segments_to_look_at.is_empty() {
+            break;
+        }
+
+        let (start_idx, end_idx) = segments_to_look_at.pop().unwrap();
+        if start_idx + 1 == end_idx {
+            continue;
+        }
+
+        
+        let mut dmax_sqr: Fraction<i64> = Fraction::new(0, 1);
+        let mut index: usize = start_idx;
+        let mut distance_sqr: Fraction<i64>;
+
+        for (i, point) in points[start_idx+1..end_idx].iter().enumerate() {
+            if points_to_keep[i+start_idx] {
+                distance_sqr = point_line_distance_sqr(&point,
+                                               &points[start_idx],
+                                               &points[end_idx]);
+                if distance_sqr > dmax_sqr {
+                    index = i+start_idx+1;
+                    dmax_sqr = distance_sqr;
+                }
+            }
+        }
+        if dmax_sqr > e {
+            segments_to_look_at.push((start_idx, index));
+            segments_to_look_at.push((index, end_idx));
+        } else {
+            for i in start_idx+1..end_idx {
+                points_to_keep[i] = false;
+            }
+        }
     }
+
+    let new_points: Vec<_> = points.drain(..).zip(points_to_keep.into_iter()).filter_map(|(point, keep)| if keep { Some(point) } else { None }).collect();
+
+    return new_points;
 }
 
 pub fn simplify(geom: Geometry<i32>, epsilon: i32) -> Option<Geometry<i32>> {
@@ -144,7 +171,8 @@ pub fn simplify(geom: Geometry<i32>, epsilon: i32) -> Option<Geometry<i32>> {
 }
 
 fn simplify_linestring(geom: LineString<i32>, epsilon: i32, should_be_ring: bool) -> Option<LineString<i32>> {
-    let new_points = rdp(&geom.0, epsilon);
+    let LineString(points) = geom;
+    let new_points = rdp(points, epsilon);
 
     if should_be_ring {
         if new_points.len() >= 4 && new_points[0] == new_points[new_points.len()-1] { 
