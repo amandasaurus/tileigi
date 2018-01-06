@@ -581,7 +581,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // FIXME rather than filtering out invalid geoms here, prevent the clipping code from
             // generating invalid geoms in the first place
             // One error was creating a linestring with 2 points, both the same
-            let is_poly = if let Geometry::Polygon(_) = geom { true } else { false };
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
