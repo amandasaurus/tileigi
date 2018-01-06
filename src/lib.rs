@@ -229,7 +229,6 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
 
-    //write_tilejson(&layers, &connection_pool, &dest_dir);
 
     let (printer_tx, printer_rx) = channel();
     let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
@@ -238,11 +237,15 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
     let mut fileio_thread = match dest {
         &TileDestinationType::TileStashDirectory(ref path) => {
-            let tile_dest = fileio::TileStashDirectory::new(&PathBuf::from(path));
+            let path = PathBuf::from(path);
+            write_tilejson(&layers, &connection_pool, &path);
+            let tile_dest = fileio::TileStashDirectory::new(&path);
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
         },
         &TileDestinationType::MBTiles(ref path) => {
-            let tile_dest = fileio::MBTiles::new(&PathBuf::from(path));
+            let path = PathBuf::from(path);
+            write_tilejson(&layers, &connection_pool, &path);
+            let tile_dest = fileio::MBTiles::new(&path);
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
         },
     };
