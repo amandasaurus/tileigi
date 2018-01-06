@@ -67,15 +67,19 @@ fn point_line_distance_sqr(point: &Point<i32>, start: &Point<i32>, end: &Point<i
     if start == end {
         Fraction::new(distance_sqr(point, start), 1)
     } else {
+        let start_x = start.y() as i64;
+        let start_y = start.y() as i64;
+        let end_x = end.y() as i64;
+        let end_y = end.y() as i64;
+        let point_x = point.x() as i64;
+        let point_y = point.y() as i64;
         // point = (x0, y0)
         // |(y2 - y1)x0 - (x2 - x1)y0 + x2y1 - y2x1|
         // |a - b + c - d|
         // |a+c - (b+d)|
         // which we turn into a + c compared with b+d to get the diff
-        let ac = (end.y() - start.y())*point.x() + end.x()*start.y();
-        let bd = (end.x() - start.x())*point.y() + end.y()*start.x();
-        let ac = ac as i64;
-        let bd = bd as i64;
+        let ac = (end_y - start_y)*point_x + end_x*start_y;
+        let bd = (end_x - start_x)*point_y + end_y*start_x;
         let numerator = if ac > bd { ac - bd } else { bd - ac };
         let numerator = numerator*numerator;
 
