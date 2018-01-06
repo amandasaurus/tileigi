@@ -80,10 +80,6 @@ fn is_polygon_valid_skip_expensive<T: CoordinateType+Signed+Debug+Ord>(p: &Polyg
             return false;
         }
 
-        if has_self_intersections(&i) {
-            return false;
-        }
-
     }
 
 
