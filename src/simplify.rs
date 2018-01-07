@@ -357,7 +357,8 @@ fn twice_triangle_area<T: CoordinateType+Debug>(x1: T, y1: T, x2: T, y2: T, x3: 
 }
 
 fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
-    // FIXME There is definitely a more effecient way to do this.
+    // FIXME There is definitely a more effecient way to do this. There is certainly a lot of
+    // memory moving.
 
     // we could have a few points in a line in a spike, but at each run of this loop, it'll only
     // remove the end point of the spike. So we need to run it again and again to remove all the
@@ -385,6 +386,7 @@ fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
 
         // keep removing until we haven't removed anything
         if have_removed_points {
+            //println!("going again");
             continue;
         } else {
             break;
