@@ -494,7 +494,14 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let mut geom = remap_geometry(geom, minx, maxx, miny, maxy, extent);
             if geom.is_none() { continue; }
             let mut geom = geom.unwrap();
+            println!("\nBefore remove");
+            print_geom_as_geojson(&geom);
+
             simplify::remove_unneeded_points(&mut geom);
+            println!("\nAfter remove");
+            print_geom_as_geojson(&geom);
+
+            debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
@@ -513,6 +520,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 None => { continue; },
                 Some(g) => g,
             };
+            //println!("\nL {} geom {:?}", line!(), geom);
             //if bad_obj {
             //    println!("\nL {} geom {:?}", line!(), geom);
             //}
@@ -532,7 +540,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 },
                 Some(g) => g,
             };
-            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:?}", line!(), geom);
+            debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:?}", line!(), geom);
+            //println!("\nL {} geom {:?}", line!(), geom);
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
@@ -584,11 +593,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
-            //println!("\nL {} geom {:?}\nmetatile {:?}\nbuffer {}", line!(), geom, metatile, buffer);
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
                     Some(mut g) => {
                         //debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
+                        //println!("\nL {} geom {:?}\nvalid: {}", line!(), g, is_valid(&g));
                         if is_valid(&g) {
                             validity::ensure_polygon_orientation(&mut g);
                             Some((t, g))
@@ -607,6 +616,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                 geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
 
+                // FIXME we already do a is_valid & ensure_polygon_orientation above?
                 validity::ensure_polygon_orientation(&mut geom);
                 if is_valid(&geom) {
                     if bad_obj {
@@ -646,6 +656,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
     }).collect()
 
 }
+
 
 fn remap_linestring(ls: LineString<f64>, minx: f64, maxx: f64, miny: f64, maxy: f64, size: f64, should_be_ring: bool) -> Option<LineString<i32>> {
     fn conv(x: f64) -> i32 {
@@ -774,3 +785,34 @@ fn remap_geometry(geom: Geometry<f64>, minx: f64, maxx: f64, miny: f64, maxy: f6
     }
 }
 
+fn x_to_lon(x: i32) -> f64 {
+    let earth_radius = 6378137.;
+    let x = x as f64;
+    let x = (x/4096.) * (2.*20037508.34) - 20037508.34;
+    //let x = self.lon() * 20037508.34 / 180.;
+
+    (x/earth_radius).to_degrees()
+}
+
+fn y_to_lat(y: i32) -> f64 {
+    let old_y = y;
+    let y = y as f64;
+    let y = y/4096.;
+    
+    let pi = std::f64::consts::PI;
+
+    ((1. - 2.*y) * pi).sinh().atan().to_degrees()
+}
+
+fn print_geom_as_geojson(geom: &Geometry<i32>) {
+    println!("\n");
+    match *geom {
+        Geometry::Polygon(ref poly) => {
+            print!("{{\"type\": \"Polygon\", \"coordinates\": [");
+            print!("[{}]", poly.exterior.0.iter().map(|p| format!("[{}, {}]", x_to_lon(p.x()), y_to_lat(p.y()))).collect::<Vec<_>>().join(", "));
+            print!("]}}");
+        },
+        _ => unimplemented!(),
+    }
+    println!("\n");
+}
