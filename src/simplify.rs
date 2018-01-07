@@ -375,7 +375,7 @@ fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
             let p1 = ls.0[i-1];
             let p2 = ls.0[i];
             let p3 = ls.0[i+1];
-            if twice_triangle_area(p2.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y()) == T::zero() {
+            if twice_triangle_area(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y()) == T::zero() {
                 //println!("Removing point {}", i);
                 ls.0.remove(i);
                 have_removed_points = true;
