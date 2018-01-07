@@ -352,27 +352,45 @@ fn remove_duplicate_points_linestring<T: CoordinateType+Debug>(ls: &mut LineStri
     }
 }
 
-fn is_triangle_area_zero<T: CoordinateType+Debug>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T) -> bool {
-    ( (x1 - x3)*(y2 - y1) - (x1 - x2)*(y3 - y1) ) == T::zero()
+fn twice_triangle_area<T: CoordinateType+Debug>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T) -> T {
+    (x1 - x3)*(y2 - y1) - (x1 - x2)*(y3 - y1)
 }
 
 fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
-    let mut i = 1;
     // FIXME There is definitely a more effecient way to do this.
 
+    // we could have a few points in a line in a spike, but at each run of this loop, it'll only
+    // remove the end point of the spike. So we need to run it again and again to remove all the
+    // points, to entirely remove the spike.
     loop {
-        if i >= (ls.0.len() - 1) {
-            break;
+        let mut have_removed_points = false;
+
+        let mut i = 1;
+
+        loop {
+            if i >= (ls.0.len() - 1) {
+                break;
+            }
+
+            let p1 = ls.0[i-1];
+            let p2 = ls.0[i];
+            let p3 = ls.0[i+1];
+            if twice_triangle_area(p2.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y()) == T::zero() {
+                //println!("Removing point {}", i);
+                ls.0.remove(i);
+                have_removed_points = true;
+            }
+            i += 1;
         }
 
-        let p1 = ls.0[i-1];
-        let p2 = ls.0[i];
-        let p3 = ls.0[i+1];
-        if is_triangle_area_zero(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y()) {
-            ls.0.remove(i);
+        // keep removing until we haven't removed anything
+        if have_removed_points {
+            continue;
+        } else {
+            break;
         }
-        i += 1;
     }
+
 }
 
 pub fn remove_spikes<T: CoordinateType+Debug>(geom: &mut Geometry<T>) {
