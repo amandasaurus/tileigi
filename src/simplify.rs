@@ -216,6 +216,7 @@ fn simplify_multipolygon(geom: MultiPolygon<i32>, epsilon: i32) -> Option<MultiP
 pub fn remove_unneeded_points<T: CoordinateType+Debug>(mut geom: &mut Geometry<T>) {
     remove_points_in_line(&mut geom);
     remove_duplicate_points(&mut geom);
+    remove_spikes(&mut geom);
 }
 
 /// Remove unneeded points from lines.
@@ -348,6 +349,55 @@ fn remove_duplicate_points_linestring<T: CoordinateType+Debug>(ls: &mut LineStri
         if ls.0[len-1] != ls.0[len-2] { break; }
         // the last point is duplicated from the 2nd last
         ls.0.remove(len-1);
+    }
+}
+
+fn is_triangle_area_zero<T: CoordinateType+Debug>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T) -> bool {
+    ( (x1 - x3)*(y2 - y1) - (x1 - x2)*(y3 - y1) ) == T::zero()
+}
+
+fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
+    let mut i = 1;
+    // FIXME There is definitely a more effecient way to do this.
+
+    loop {
+        if i >= (ls.0.len() - 1) {
+            break;
+        }
+
+        let p1 = ls.0[i-1];
+        let p2 = ls.0[i];
+        let p3 = ls.0[i+1];
+        if is_triangle_area_zero(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y()) {
+            ls.0.remove(i);
+        }
+        i += 1;
+    }
+}
+
+pub fn remove_spikes<T: CoordinateType+Debug>(geom: &mut Geometry<T>) {
+    match *geom {
+        Geometry::LineString(ref mut ls) => remove_spikes_linestring(ls),
+        Geometry::MultiLineString(ref mut mls) => {
+            for mut ls in mls.0.iter_mut() {
+                remove_spikes_linestring(&mut ls);
+            }
+        },
+        Geometry::Polygon(ref mut p) => {
+            remove_spikes_linestring(&mut p.exterior);
+            for mut i in p.interiors.iter_mut() {
+                remove_spikes_linestring(&mut i);
+            }
+            },
+        Geometry::MultiPolygon(ref mut mp) => {
+            for mut p in mp.0.iter_mut() {
+                remove_spikes_linestring(&mut p.exterior);
+                for mut i in p.interiors.iter_mut() {
+                    remove_spikes_linestring(&mut i);
+                }
+            }
+        }
+        _ => {},
     }
 }
 
