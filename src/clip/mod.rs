@@ -506,6 +506,7 @@ pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i32>, buffer: 
     // TODO make the slice_box etc not produce geoms with this result
     for &mut (tile, ref mut geom_opt) in res.iter_mut() {
         if let &mut Some(ref mut geom) = geom_opt {
+            // FIXME replace with remove_unneeded_points ?
             remove_duplicate_points(geom);
         }
     }

@@ -176,6 +176,7 @@ fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>
         // With 4 points, it's a orientation, not self-intersection thing really
         return false;
     }
+    //println!("\n\nXXX\n");
 
     for (i, points12) in ls.0.windows(2).enumerate() {
         let (p1, p2) = (points12[0], points12[1]);
