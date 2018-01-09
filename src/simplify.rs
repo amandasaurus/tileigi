@@ -1,54 +1,9 @@
 use std::cmp::Ordering;
 use std::fmt::Debug;
 
+use fraction::Fraction;
+
 use geo::*;
-
-#[derive(Debug)]
-struct Fraction<T: CoordinateType> {
-    numerator: T,
-    denominator: T,
-}
-
-impl<T: CoordinateType> Fraction<T> {
-    fn new(numerator: T, denominator: T) -> Self {
-        Fraction{ numerator, denominator }
-    }
-}
-
-impl<T: CoordinateType> PartialEq for Fraction<T> {
-    fn eq(&self, other: &Self) -> bool {
-        let a = self.numerator;
-        let b = self.denominator;
-        let c = other.numerator;
-        let d = other.denominator;
-
-        if b == d {
-            a == c
-        } else {
-            a*d == b*c
-        }
-    }
-}
-
-impl<T: CoordinateType> PartialOrd for Fraction<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let a = self.numerator;
-        let b = self.denominator;
-        let c = other.numerator;
-        let d = other.denominator;
-        if b == d {
-            a.partial_cmp(&c)
-        } else {
-            // In our use case, we can assume this is true
-            assert!(b != T::zero());
-            assert!(b > T::zero());
-            assert!(d != T::zero());
-            assert!(d > T::zero());
-
-            (a*d).partial_cmp(&(b*c))
-        }
-    }
-}
 
 fn distance_sqr(a: &Point<i32>, b: &Point<i32>) -> i64 {
     let delta_x = if a.x() > b.x() { a.x() - b.x() } else { b.x() - a.x() };

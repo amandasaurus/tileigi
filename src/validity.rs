@@ -5,6 +5,8 @@ use std::cmp::{min, max, Ord};
 use num_traits::Signed;
 use std::fmt::Debug;
 
+use fraction::Fraction;
+
 pub fn is_valid<T: CoordinateType+Signed+Debug+Ord>(geom: &Geometry<T>) -> bool {
     match *geom {
         Geometry::LineString(ref ls) => is_linestring_valid(ls),
@@ -176,17 +178,21 @@ fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>
         // With 4 points, it's a orientation, not self-intersection thing really
         return false;
     }
-    //println!("\n\nXXX\n");
+    //println!("\n\nXXX\nls {:?}\n", ls);
 
     for (i, points12) in ls.0.windows(2).enumerate() {
         let (p1, p2) = (points12[0], points12[1]);
-        for points34 in ls.0.windows(2).skip(i+1) {
+        
+        for points34 in ls.0[i+1..].windows(2).take(ls.0.len()-i-1) {
             let (p3, p4) = (points34[0], points34[1]);
+            //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
 
-            if intersect_excl_end(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y(), p4.x(), p4.y()) {
-                //println!("\n\nintersection i {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, p1, p2, p3, p4);
-                return true;
+            match intersection(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y(), p4.x(), p4.y()) {
+                Intersection::Crossing | Intersection::Overlapping  => { return true; },
+                Intersection::Touching => { return true; },
+                Intersection::None | Intersection::EndToEnd => {},
             }
+            //println!("no intersection");
         }
     }
 
@@ -194,14 +200,37 @@ fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>
     false
 }
 
-/// True iff the segments |p1p2| and |p3p4| intersect at any point except their endpoints
-fn intersect_excl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> bool {
-    // FIXME add initiall bbox check which should speed it up
-    
+#[derive(PartialEq,Eq,Clone,Copy,Debug)]
+enum Intersection {
+    // They don't intersect/touch at all
+    None,
+
+    // One is wholly, or partially, on top of another, ie infinite number of intersecting points,
+    // the intersection is a line
+    Overlapping,
+
+    // The end point of one is the same as the end point of another,
+    EndToEnd,
+
+    // The end of one touches the other, but not at it's end
+    Touching,
+
+    // real crossing
+    Crossing,
+}
+
+fn intersect_incl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> bool {
+    intersection(x1, y1, x2, y2, x3, y3, x4, y4) == Intersection::None
+}
+
+
+/// True iff the segments |p1p2| and |p3p4| intersect at any point, and the intersection point is
+/// not on both end points. i.e. 2 lines can join end-to-end in this, but not touch anywhere else.
+fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> Intersection {
     if max(x1, x2) < min(x3, x4) || min(x1, x2) > max(x3, x4)
         || max(y1, y2) < min(y3, y4) || min(y1, y2) > max(y3, y4)
     {
-        return false;
+        return Intersection::None;
     }
     
     debug_assert!((x1, y1) != (x2, y2));
@@ -214,7 +243,38 @@ fn intersect_excl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y
 
     let determinate = a*d - b*c;
     if determinate == T::zero() {
-        return false;
+        let slope_12 = Fraction::new(a, c);
+        let slope_34 = Fraction::new(b, d);
+        let neg_slope_34 = Fraction::new(-b, d);
+        assert!((slope_12 == slope_34) || (slope_12 == neg_slope_34)); // if this is false, then I don't know what's going on.
+
+        let delta_12 = (a, c);
+        let delta_13 = (x3 - x1, y3 - y1);
+        let delta_14 = (x4 - x1, y4 - y1);
+        let delta_23 = (x3 - x2, y3 - y2);
+        let delta_24 = (x4 - x2, y4 - y2);
+
+        let zero = (T::zero(), T::zero());
+        let p3_on_end = (x1, y1) == (x3, y3) || (x2, y2) == (x3, y3);
+        let p4_on_end = (x1, y1) == (x4, y4) || (x2, y2) == (x4, y4);
+        let p3_on_12_excl_end = delta_13 > zero && delta_13 < delta_12;
+        let p4_on_12_excl_end = delta_14 > zero && delta_14 < delta_12;
+
+        if ((x1, y1) == (x3, y3) && (x2, y2) == (x4, y4)) || ((x1, y1) == (x4, y4) && (x2, y2) == (x3, y3)) {
+            return Intersection::Overlapping;
+        } else if (p3_on_end && !p4_on_12_excl_end) || (p4_on_end && !p3_on_12_excl_end) {
+            return Intersection::EndToEnd;
+        } else if (p3_on_end && p4_on_12_excl_end) || (p4_on_end && p3_on_12_excl_end) {
+            return Intersection::Overlapping;
+        } else if (!p3_on_end && p4_on_12_excl_end) || (!p4_on_end && p3_on_12_excl_end) {
+            return Intersection::Overlapping;
+        }
+
+        println!("({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
+        println!("({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
+        println!("delta_12 {:?}\ndelta_13 {:?} delta_14 {:?}\ndelta_23 {:?} delta_24 {:?}", delta_12, delta_13, delta_14, delta_23, delta_24);
+        println!("p3_on_end {} p3_on_12_excl_end {}\np4_on_end {} p4_on_12_excl_end {}", p3_on_end, p3_on_12_excl_end, p4_on_end, p4_on_12_excl_end);
+        unreachable!();
     }
 
     let e = x3 - x1;
@@ -226,44 +286,126 @@ fn intersect_excl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y
 
     let sd = signum * (a*f - c*e);
     if sd > determinate || sd < T::zero() {
-        return false
+        return Intersection::None;
     }
 
     let td = signum*(d*e - b*f);
     if td > determinate || td < T::zero() {
-        return false
+        return Intersection::None;
     }
 
     if (td == determinate || td == T::zero()) && (sd == T::zero() || sd == determinate) {
         // endpoints overlap
-        return false;
-    }
-
-    if td >= T::zero() && td <= determinate && sd >= T::zero() && sd <= determinate {
-        return true;
+        return Intersection::EndToEnd;
+    } else if (td == determinate || td == T::zero()) && (sd > T::zero() || sd < determinate) {
+        return Intersection::Touching
+    } else if (td < determinate || td > T::zero()) && (sd == T::zero() || sd == determinate) {
+        return Intersection::Touching
+    } else if td > T::zero() && td < determinate && sd > T::zero() && sd < determinate {
+        return Intersection::Crossing;
     }
 
     // Should have been caught above.
     println!("points {:?} {:?} {:?} {:?}", (x1, y1), (x2, y2), (x3, y3), (x4, y4));
-    println!("det {:?} ds {:?} dt {:?}", determinate, sd, td);
+    println!("det {:?} sd {:?} td {:?}", determinate, sd, td);
     unreachable!();
 }
+
+pub fn make_valid<T: CoordinateType>(geom: Geometry<T>) -> Geometry<T> {
+    match geom {
+        Geometry::Polygon(p) => Geometry::MultiPolygon(make_polygon_valid(p)),
+        Geometry::MultiPolygon(mp) => {
+            unimplemented!();
+        },
+        x => x,
+    }
+}
+
+fn make_polygon_valid<T: CoordinateType>(p: Polygon<T>) -> MultiPolygon<T> {
+    MultiPolygon(vec![])
+
+}
+
 
 #[cfg(test)]
 mod test {
     use super::*;
 
-    //#[test]
-    //fn intersect1() {
-    //    assert!(!intersect_excl_end(0, 0,  0, 10,  5, 1,  5, 2));
-    //    assert!(intersect_excl_end((0, 0), (0, 10), (0, 5), (5, 5)));
+    #[test]
+    fn intersect1() {
 
-    //    assert!(!intersect_excl_end((0, 0), (0, 10), (0, 10), (0, 20)));
-    //    assert!(intersect_excl_end((0, 0), (0, 10), (-5, 5), (5, 5)));
-    //    assert!(!intersect_excl_end((0, 0), (10, 0), (10, 0), (10, 10)));
-    //    assert!(intersect_excl_end((-5, 5), (5, 5), (0, 0), (0, 10)));
+        assert_eq!(intersection(0, 0,  0, 10,  5, 1,  5, 2), Intersection::None);
+        assert_eq!(intersection(0, 0,  0, 10,  0, 5,  5, 5), Intersection::Touching);
 
-    //}
+        assert_eq!(intersection(0, 0,  0, 10,  0, 0,  0, 10), Intersection::Overlapping);
+        assert_eq!(intersection(0, 0,  0, 10,  0, 5,  0, 10), Intersection::Overlapping);
+        assert_eq!(intersection(0, 0,  0, 10,  0, 5,  0, 15), Intersection::Overlapping);
+        assert_eq!(intersection(0, 0,  0, 10,  0, 0,  0, 5), Intersection::Overlapping);
+        assert_eq!(intersection(0, 0,  0, 10,  0, 2,  0, 8), Intersection::Overlapping);
+
+        assert_eq!(intersection(0, 0, 0, 10,  0, 10,  1, 20), Intersection::EndToEnd);
+        assert_eq!(intersection(0, 0, 0, 10,  0, 10,  0, 20), Intersection::EndToEnd);
+        assert_eq!(intersection(0, 0, 0, 10,  1, 10,  0, 10), Intersection::EndToEnd);
+
+
+        //   C
+        // A-B
+        // test all combinations
+        // ABBC
+        assert_eq!(intersection(0,0, 0,1,  0,1, 1,1), Intersection::EndToEnd);
+        // ABCB
+        assert_eq!(intersection(0,0, 0,1,  1,1, 0,1), Intersection::EndToEnd);
+        // BABC
+        assert_eq!(intersection(0,1, 0,0,  0,1, 1,1), Intersection::EndToEnd);
+        // BACB
+        assert_eq!(intersection(0,1, 0,0,  1,1, 0,1), Intersection::EndToEnd);
+        
+
+        assert_eq!(intersection(0, 0, 0, 10,  1, 10,  1, 20), Intersection::None);
+        assert_eq!(intersection(0, 0, 0, 10,  1, 20,  1, 40), Intersection::None);
+
+        assert_eq!(intersection(0, 0,  0, 10,  -5, 5,  5, 5), Intersection::Crossing);
+        assert_eq!(intersection(0, 0,  10, 0,  10, 0,  10, 10), Intersection::EndToEnd);
+        assert_eq!(intersection(-5, 5,  5, 5,  0, 0,  0, 10), Intersection::Crossing);
+        assert_eq!(intersection(0, 0,  10, 0,  5, 10,  5, -10), Intersection::Crossing);
+
+    }
+
+    #[test]
+    fn intersect2() {
+        assert!(!has_self_intersections(&vec![(0, 0), (1, 0)].into()));
+        assert!(!has_self_intersections(&vec![(0, 0), (1, 0), (2, 0)].into()));
+        assert!(!has_self_intersections(&vec![(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0)].into()));
+
+        // should be a problem
+        assert!(has_self_intersections(&vec![(0, 0), (10, 0), (10, 10), (5, 10), (5, -10)].into()));
+
+        // closed ring, should be OK
+        assert!(!has_self_intersections(&vec![(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)].into()));
+    }
+
+    #[test]
+    fn validity_checks() {
+        let geom: LineString<i32> = LineString(vec![]);
+        assert!(!is_linestring_valid(&geom));
+
+        assert!(!is_linestring_valid(&LineString(vec![(0i32, 0i32).into()])));
+
+        // Simple square - valid
+        assert!(is_polygon_valid(&Polygon::new(vec![(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)].into(), vec![])));
+        // Unclosed - invalid
+        assert!(!is_polygon_valid(&Polygon::new(vec![(0, 0), (0, 1), (1, 1), (1, 0)].into(), vec![])));
+
+        // Has a touching inner
+        let geom: Polygon<i32> = Polygon::new(vec![(0, 0), (0, 2), (1, 2), (1, 1), (2, 1), (2, 3), (1, 3), (1, 2), (0, 2), (0, 4), (3, 4), (3, 0), (0, 0)].into(), vec![]);
+        assert!(!is_polygon_valid(&geom));
+    }
     
+    #[test]
+    fn test_make_valid() {
+        let geom: Geometry<i32> = Polygon::new(vec![(0, 0), (0, 2), (1, 2), (1, 1), (2, 1), (2, 3), (1, 3), (1, 2), (0, 2), (0, 4), (3, 4), (3, 0), (0, 0)].into(), vec![]).into();
+        //let geom: Geometry<i32> = Polygon::new(vec![(0, 0), (0, 4), (4, 4), (4, 0), (0, 0)].into(), vec![]).into();
+        assert!(!is_valid(&geom));
+    }
 }
 

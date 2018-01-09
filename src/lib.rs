@@ -48,6 +48,7 @@ use validity::{is_valid, is_valid_skip_expensive};
 mod printer;
 mod fileio;
 mod simplify;
+mod fraction;
 
 use fileio::FileIOMessage;
 
@@ -494,14 +495,14 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let mut geom = remap_geometry(geom, minx, maxx, miny, maxy, extent);
             if geom.is_none() { continue; }
             let mut geom = geom.unwrap();
-            println!("\nBefore remove");
-            print_geom_as_geojson(&geom);
+            //println!("\nBefore remove");
+            //print_geom_as_geojson(&geom);
 
             simplify::remove_unneeded_points(&mut geom);
-            println!("\nAfter remove");
-            print_geom_as_geojson(&geom);
+            //println!("\nAfter remove");
+            //print_geom_as_geojson(&geom);
 
-            debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
+            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
@@ -510,16 +511,17 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             //    continue;
             //}
 
-            // TODO after converting to integer, maybe run a simple algorithm that removes points
-            // which are on the line, i.e. A-B-C is straight line, so remove B. This keeps the
-            // shape the same, but could reduce the number of points, which means other algorithms
-            // will have less work to do.
-
-            let simplification: i32 = if metatile.zoom() == layers.global_maxzoom { 1 } else { 8 };
-            let geom = match simplify::simplify(geom, simplification) {
-                None => { continue; },
-                Some(g) => g,
-            };
+            // Only do the simplification if we're not at maxzoom. We've already removed extra
+            // points in remove_unneeded_points above
+            let geom = if metatile.zoom() < layers.global_maxzoom {
+                    match simplify::simplify(geom, 8) {
+                        None => { continue; },
+                        Some(g) => g,
+                    }
+            } else { geom };
+            //println!("\nAfter simplify");
+            //print_geom_as_geojson(&geom);
+            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             //println!("\nL {} geom {:?}", line!(), geom);
             //if bad_obj {
             //    println!("\nL {} geom {:?}", line!(), geom);
