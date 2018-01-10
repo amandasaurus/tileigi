@@ -391,6 +391,10 @@ mod test {
 
         assert!(!is_linestring_valid(&LineString(vec![(0i32, 0i32).into()])));
 
+        assert!(!is_linestring_valid(&vec![(0, 0), (4, 0), (2, -1), (2, 1)].into()));
+        // TODO fix
+        //assert!(!is_linestring_valid(&vec![(0, 0), (4, 0), (2, -1), (2, 0), (2, 1)].into()));
+
         // Simple square - valid
         assert!(is_polygon_valid(&Polygon::new(vec![(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)].into(), vec![])));
         // Unclosed - invalid
