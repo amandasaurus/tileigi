@@ -407,9 +407,14 @@ mod test {
     
     #[test]
     fn test_make_valid() {
-        let geom: Geometry<i32> = Polygon::new(vec![(0, 0), (0, 2), (1, 2), (1, 1), (2, 1), (2, 3), (1, 3), (1, 2), (0, 2), (0, 4), (3, 4), (3, 0), (0, 0)].into(), vec![]).into();
-        //let geom: Geometry<i32> = Polygon::new(vec![(0, 0), (0, 4), (4, 4), (4, 0), (0, 0)].into(), vec![]).into();
-        assert!(!is_valid(&geom));
+        let geom: Polygon<i32> = Polygon::new(vec![(0, 0), (0, 2), (1, 2), (1, 1), (2, 1), (2, 3), (1, 3), (1, 2), (0, 2), (0, 4), (3, 4), (3, 0), (0, 0)].into(), vec![]);
+        assert!(!is_polygon_valid(&geom));
+        
+        let mut new_geom = make_polygon_valid(geom);
+        assert_eq!(new_geom.0.len(), 1);
+        let new_geom: Polygon<_> = new_geom.0.remove(0);
+        assert!(is_polygon_valid(&new_geom));
+        assert_eq!(new_geom, Polygon::new(vec![(0, 0), (0, 4), (3, 4), (3, 0), (0, 0)].into(), vec![vec![(1, 1), (2, 1), (2, 3), (1, 3), (1, 1)].into()]));
     }
 }
 
