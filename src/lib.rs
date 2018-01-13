@@ -479,7 +479,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let mut bad_obj = false;
 
             if bad_obj {
-                println!("\nL {} starting", line!());
+                println!("\nL {} starting tile {:?}", line!(), metatile);
             }
 
             // TODO not sure about this
@@ -493,14 +493,19 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 println!("\nL {} minx {} maxx {} miny {} maxy {} extent {}", line!(), minx, maxx, miny, maxy, extent);
             }
             let mut geom = remap_geometry(geom, minx, maxx, miny, maxy, extent);
-            if geom.is_none() { continue; }
+            if geom.is_none() {
+                if bad_obj {
+                    println!("\nL {} none after remap", line!());
+                }
+                continue;
+            }
             let mut geom = geom.unwrap();
-            //println!("\nBefore remove");
-            //print_geom_as_geojson(&geom);
+            println!("\nBefore remove");
+            print_geom_as_geojson(&geom);
 
             simplify::remove_unneeded_points(&mut geom);
-            //println!("\nAfter remove");
-            //print_geom_as_geojson(&geom);
+            println!("\nAfter remove");
+            print_geom_as_geojson(&geom);
 
             //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             if bad_obj {
