@@ -2,8 +2,10 @@ use geo::*;
 use geo::map_coords::MapCoords;
 use geo::intersects::Intersects;
 use std::cmp::{min, max, Ord};
+use std::collections::HashMap;
 use num_traits::Signed;
 use std::fmt::Debug;
+use std::hash::Hash;
 
 use fraction::Fraction;
 
@@ -39,7 +41,7 @@ fn is_linestring_valid<T: CoordinateType>(ls: &LineString<T>) -> bool {
     true
 }
 
-fn is_polygon_valid<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon<T>) -> bool {
+pub fn is_polygon_valid<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon<T>) -> bool {
     is_polygon_valid_skip_expensive(p) && is_polygon_valid_do_expensive(p)
 }
 
@@ -185,11 +187,11 @@ fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>
         
         for points34 in ls.0[i+1..].windows(2).take(ls.0.len()-i-1) {
             let (p3, p4) = (points34[0], points34[1]);
-            //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
+            //println!("looking at i {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, p1, p2, p3, p4);
 
             match intersection(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y(), p4.x(), p4.y()) {
-                Intersection::Crossing | Intersection::Overlapping  => { return true; },
-                Intersection::Touching => { return true; },
+                Intersection::Crossing(_) | Intersection::Overlapping(_, _)  => { return true; },
+                Intersection::Touching(_) => { return true; },
                 Intersection::None | Intersection::EndToEnd => {},
             }
             //println!("no intersection");
@@ -201,22 +203,23 @@ fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>
 }
 
 #[derive(PartialEq,Eq,Clone,Copy,Debug)]
-enum Intersection {
+enum Intersection<T> {
     // They don't intersect/touch at all
     None,
 
     // One is wholly, or partially, on top of another, ie infinite number of intersecting points,
     // the intersection is a line
-    Overlapping,
+    // These points are the points where the overlap starts and ends
+    Overlapping((T, T), (T, T)),
 
     // The end point of one is the same as the end point of another,
     EndToEnd,
 
-    // The end of one touches the other, but not at it's end
-    Touching,
+    // The end of one touches the other, but not at it's end, at point (T, T)
+    Touching((T, T)),
 
-    // real crossing
-    Crossing,
+    // real crossing, at point (T, T)
+    Crossing((T, T))
 }
 
 fn intersect_incl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> bool {
@@ -226,13 +229,16 @@ fn intersect_incl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y
 
 /// True iff the segments |p1p2| and |p3p4| intersect at any point, and the intersection point is
 /// not on both end points. i.e. 2 lines can join end-to-end in this, but not touch anywhere else.
-fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> Intersection {
+fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> Intersection<T> {
     if max(x1, x2) < min(x3, x4) || min(x1, x2) > max(x3, x4)
         || max(y1, y2) < min(y3, y4) || min(y1, y2) > max(y3, y4)
     {
         return Intersection::None;
     }
     
+    //println!("\nline12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
+    //println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
+
     debug_assert!((x1, y1) != (x2, y2));
     debug_assert!((x3, y3) != (x4, y4));
 
@@ -243,38 +249,62 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
 
     let determinate = a*d - b*c;
     if determinate == T::zero() {
-        let slope_12 = Fraction::new(a, c);
-        let slope_34 = Fraction::new(b, d);
-        let neg_slope_34 = Fraction::new(-b, d);
-        assert!((slope_12 == slope_34) || (slope_12 == neg_slope_34)); // if this is false, then I don't know what's going on.
+        // TODO should probably profile & optimize this bit
+        // Slope of line12 is a/c, slope of line34 is b/d. Lines are parallel/colinear if a/c =
+        // b/d, i.e.  a*d - b*c == 0
+        // This branch is when the slopes are the same
 
-        let delta_12 = (a, c);
-        let delta_13 = (x3 - x1, y3 - y1);
-        let delta_14 = (x4 - x1, y4 - y1);
-        let delta_23 = (x3 - x2, y3 - y2);
-        let delta_24 = (x4 - x2, y4 - y2);
-
-        let zero = (T::zero(), T::zero());
-        let p3_on_end = (x1, y1) == (x3, y3) || (x2, y2) == (x3, y3);
-        let p4_on_end = (x1, y1) == (x4, y4) || (x2, y2) == (x4, y4);
-        let p3_on_12_excl_end = delta_13 > zero && delta_13 < delta_12;
-        let p4_on_12_excl_end = delta_14 > zero && delta_14 < delta_12;
-
+        // The lines are the same (if we ignore direction). One lies totally on top of the
+        // other
         if ((x1, y1) == (x3, y3) && (x2, y2) == (x4, y4)) || ((x1, y1) == (x4, y4) && (x2, y2) == (x3, y3)) {
-            return Intersection::Overlapping;
-        } else if (p3_on_end && !p4_on_12_excl_end) || (p4_on_end && !p3_on_12_excl_end) {
-            return Intersection::EndToEnd;
-        } else if (p3_on_end && p4_on_12_excl_end) || (p4_on_end && p3_on_12_excl_end) {
-            return Intersection::Overlapping;
-        } else if (!p3_on_end && p4_on_12_excl_end) || (!p4_on_end && p3_on_12_excl_end) {
-            return Intersection::Overlapping;
+            return Intersection::Overlapping((x1, y1), (x2, y2));
         }
 
-        println!("({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
-        println!("({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
-        println!("delta_12 {:?}\ndelta_13 {:?} delta_14 {:?}\ndelta_23 {:?} delta_24 {:?}", delta_12, delta_13, delta_14, delta_23, delta_24);
-        println!("p3_on_end {} p3_on_12_excl_end {}\np4_on_end {} p4_on_12_excl_end {}", p3_on_end, p3_on_12_excl_end, p4_on_end, p4_on_12_excl_end);
-        unreachable!();
+        if ((x2-x1)+(x4-x3) == (x4-x1)) && ((y2-y1)+(y4-y3) == (y4-y1)) {
+            // One after the other. We know they have the same slope, so this shortcut calculation
+            // works.
+            return Intersection::EndToEnd;
+        }
+
+        let slope_12 = Fraction::new(a, c);
+        let slope_13 = Fraction::new(x3-x1, y3-y1);
+
+        if !slope_12.same_slope(&slope_13) {
+            return Intersection::None;
+        }
+
+        let slope_34 = Fraction::new(b, d);
+
+        let slope_23 = Fraction::new(x3-x1, y3-y1);
+        let slope_14 = Fraction::new(x4-x1, y4-y1);
+        let slope_24 = Fraction::new(x4-x2, y4-y2);
+
+        // TODO Maybe remove Copy & use reference &U? Would that mean less memory copies?
+        fn in_bounds<U: Ord+Copy>(z: U, a: U, b: U) -> bool {
+            z >= min(a,b) && z <= max(a,b)
+        }
+
+        let p3_on_end = (x1, y1) == (x3, y3) || (x2, y2) == (x3, y3);
+        let p4_on_end = (x1, y1) == (x4, y4) || (x2, y2) == (x4, y4);
+        let p1_on_34 = in_bounds(x1, x3, x4) && in_bounds(y1, y3, y4) && slope_13.same_slope(&slope_34);
+        let p2_on_34 = in_bounds(x2, x3, x4) && in_bounds(y2, y3, y4) && slope_23.same_slope(&slope_34);
+        let p3_on_12 = in_bounds(x3, x1, x2) && in_bounds(y3, y1, y2) && slope_13.same_slope(&slope_12);
+        let p4_on_12 = in_bounds(x4, x1, x2) && in_bounds(y4, y1, y2) && slope_14.same_slope(&slope_12);
+
+        //println!("line12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
+        //println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
+        //println!("delta_12 {:?}\ndelta_13 {:?} delta_14 {:?}\ndelta_23 {:?} delta_24 {:?}", delta_12, delta_13, delta_14, delta_23, delta_24);
+        //println!("p3_on_end {} p3_on_12 {}\np4_on_end {} p4_on_12 {}", p3_on_end, p3_on_12, p4_on_end, p4_on_12);
+        //println!("p1_on_34 {} p2_on_34 {}", p1_on_34, p2_on_34);
+        //println!("p3_on_12 {} p4_on_12 {}", p3_on_12, p4_on_12);
+
+        if ((x1, y1) == (x3, y3) && (x2, y2) == (x4, y4)) || ((x1, y1) == (x4, y4) && (x2, y2) == (x3, y3)) {
+            return Intersection::Overlapping((x1, y1), (x2, y2));
+        } else {
+            let first_point = if (x1,y1) == (x3, y3) || p1_on_34 { (x1, y1) } else if p3_on_12 { (x3,y3) } else { return Intersection::None; };
+            let last_point = if (x2,y2) == (x4, y4) || p2_on_34 { (x2, y2) } else if p4_on_12 { (x4,y4) } else { return Intersection::None; };
+            return Intersection::Overlapping(first_point, last_point);
+        }
     }
 
     let e = x3 - x1;
@@ -298,11 +328,49 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
         // endpoints overlap
         return Intersection::EndToEnd;
     } else if (td == determinate || td == T::zero()) && (sd > T::zero() || sd < determinate) {
-        return Intersection::Touching
+        if td == T::zero() {
+            return Intersection::Touching((x1, y1));
+        } else if td == determinate {
+            return Intersection::Touching((x2, y2));
+        } else {
+            unreachable!();
+        }
     } else if (td < determinate || td > T::zero()) && (sd == T::zero() || sd == determinate) {
-        return Intersection::Touching
+        if sd == T::zero() {
+            return Intersection::Touching((x3, y3));
+        } else if sd == determinate {
+            return Intersection::Touching((x4, y4));
+        } else {
+            unreachable!();
+        }
     } else if td > T::zero() && td < determinate && sd > T::zero() && sd < determinate {
-        return Intersection::Crossing;
+        // This will do some roundingin on integers
+        let xd = determinate*x1 + td*(x2 - x1);
+        let mut x = xd/determinate;
+        let yd = determinate*y1 + td*(y2 - y1);
+        let mut y = yd/determinate;
+
+        //println!("td {:?} sd {:?} determinate {:?}", td, sd, determinate);
+        //println!("xd {:?} yd {:?}", xd, yd);
+
+        // Do regular rounding on the integers (i.e. [0,0.5) is rounded down, [0.5, 1) is rounded
+        // up.
+        // Look at the remained from *d/determinate, and if it's more than half the value of
+        // determinate (or twice it is more than determinate), then the first decimal place would
+        // be above 5, ergo we should round up. i.e. we add one to the current numbers
+        let two = T::one() + T::one();
+        let twice_x_remainder = two*(xd % determinate);
+        if twice_x_remainder >= determinate {
+            x = x + T::one();
+        }
+
+        let twice_y_remainder = two*(yd % determinate);
+        if twice_y_remainder >= determinate {
+            y = y + T::one();
+        }
+        //println!("twice_x_remainder {:?} twice_y_remainder {:?}", twice_x_remainder, twice_y_remainder);
+
+        return Intersection::Crossing((x, y));
     }
 
     // Should have been caught above.
@@ -327,6 +395,195 @@ fn make_polygon_valid<T: CoordinateType>(p: Polygon<T>) -> MultiPolygon<T> {
 }
 
 
+/// Modify the LineString, so that at all self-intersection places there is a node. i.e. if 2
+/// segments cross, add a node in the middle of each segment where they cross. After this all
+/// self-intersections will be of the EndToEnd type
+fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut LineString<T>) {
+    if ls.0.len() <= 3 {
+        return;
+    }
+    //println!("\n\nXXX\nls {:?}\n", ls);
+
+    loop {
+        //println!("\nStart of loop\n{:?}", ls.0);
+        let mut coords_to_insert = HashMap::new();
+        // Keys are the point indexes.
+        // Values are a Vec of new points to add after the point with that index.
+        // So vec![(0, 0), (1, 0)] for key #3, means to insert those 2 points (in that order) after
+        // ls.0[3]
+
+        for (i, points12) in ls.0.windows(2).enumerate() {
+            let (p1, p2) = (points12[0], points12[1]);
+            
+            for (j, points34) in ls.0[i+1..].windows(2).enumerate().take(ls.0.len()-i-1) {
+                let j = j + i + 1;
+                let (p3, p4) = (points34[0], points34[1]);
+                //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
+                let x1 = p1.x(); let y1 = p1.y();
+                let x2 = p2.x(); let y2 = p2.y();
+                let x3 = p3.x(); let y3 = p3.y();
+                let x4 = p4.x(); let y4 = p4.y();
+
+                match intersection(x1, y1, x2, y2, x3, y3, x4, y4) {
+                    Intersection::None | Intersection::EndToEnd => {},
+
+                    Intersection::Crossing((x0, y0)) => {
+                        //println!("i {} j {} crossing {:?},{:?}", i, j, x0, y0);
+                        coords_to_insert.entry(i).or_insert(vec![]).push((x0, y0));
+                        coords_to_insert.entry(j).or_insert(vec![]).push((x0, y0));
+                    },
+                    Intersection::Overlapping(_, _)  => unimplemented!(),
+                    Intersection::Touching((x0, y0)) => {
+                        //println!("i {} j {} touching {:?},{:?}", i, j, x0, y0);
+                        // (x0, y0) is the point where they touch
+                        if (x1,y1) == (x0,y0) || (x2,y2) == (x0,y0) {
+                            // touching point is at end of line12, ergo it's in the middle of line34
+                            coords_to_insert.entry(j).or_insert(vec![]).push((x0, y0));
+                        } else if (x3,y3) == (x0,y0) || (x4,y4) == (x0,y0) {
+                            coords_to_insert.entry(i).or_insert(vec![]).push((x0, y0));
+                        } else {
+                            unreachable!();
+                        }
+                    }
+                }
+            }
+        }
+
+
+        if coords_to_insert.is_empty() {
+            break;
+        } else {
+            // When we insert a point into the vec, it'll push all after that along. Keep track of
+            // how many we've inserted.
+            let mut offset = 0;
+
+            // Turn hashmap into a sorted vec, sorted by index to add
+            for v in coords_to_insert.values_mut() {
+                v.dedup();
+            }
+            let mut coords_to_insert = coords_to_insert.into_iter().collect::<Vec<_>>();
+            coords_to_insert.sort();
+            let coords_to_insert = coords_to_insert;
+
+            //println!("line {:?}", ls);
+            //println!("coords_to_insert {:?}", coords_to_insert);
+
+            for (point_idx, new_points) in coords_to_insert.into_iter() {
+                for new_point in new_points.into_iter() {
+                    println!("Adding {:?} after index {}", new_point, point_idx+offset);
+                    // +1 because we want the new point to be *after* the current point we're
+                    // looking at
+                    ls.0.insert(point_idx+offset+1, Point::new(new_point.0, new_point.1));
+                    offset += 1;
+                }
+            }
+
+            //println!("We added {} new points to the line", offset);
+        }
+    }
+
+    //println!("finished");
+
+}
+
+fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Vec<LineString<T>> {
+    let LineString( points ) = ls;
+    if points.len() <= 3 {
+        // Not enough points for a proper ring
+        return vec![];
+    }
+
+    let mut outgoing_segments = HashMap::with_capacity(points.len());
+
+    for (i, p) in points.iter().enumerate() {
+        // TODO here we could assert that the existing vec is <=2, and generate the loops vec here,
+        // rather than do a loop later
+        outgoing_segments.entry((p.x(), p.y())).or_insert(vec![]).push(i);
+    }
+
+    //println!("outgoing_segments {:?}", outgoing_segments);
+    let mut loops = outgoing_segments.iter().filter(|&(_, v)| v.len() > 1).map(|(_, v)| v).collect::<Vec<_>>();
+
+    if loops.len() == 1 {
+        if loops[0][0] == 0 && loops[0][1] == points.len()-1 {
+            // start & end
+            return vec![LineString(points)];
+        } else {
+            println!("points {:?}", points);
+            println!("loops {:?}", loops);
+            unreachable!();
+        }
+    }
+
+    let mut point_unassigned = vec![true; points.len()];
+    let mut results: Vec<LineString<T>> = vec![];
+
+    debug_assert!(loops.iter().all(|idxes| idxes.len() == 2));
+
+    println!("points {:?}", points);
+    //println!("outgoing_segments {:?}", outgoing_segments);
+    // sort loops where the smaller length (in terms of number of points) are to the front.
+    // Ideal: Sort them so that if a loop is a subset of a larger loop, then the smaller is ahead,
+    // so the smaller, "inner" loop will be removed first. Unless something really strange is going
+    // on, this sort-by-length should do it (since an outer loop will be longer than the inner one
+    // it contains)
+    loops.sort_by_key(|i| (i[1]-i[0], i[0]));
+    println!("loops {:?}", loops);
+
+    // FIXME fix this
+    //assert!(loops.len() == 2);
+
+    for loop_indexes in loops {
+        assert!(loop_indexes.len() == 2);
+        let (start, end) = (loop_indexes[0], loop_indexes[1]);
+        if !point_unassigned[start] {
+            // this has already been removed earlier in another loop
+            continue;
+        }
+        println!("loop from {:?} to {:?}", start, end);
+
+        if start + 2 == end {
+            // This is only 3 points, so it's a little spike
+            // Don't include it, and ensure the points are skipped
+            point_unassigned[start] = false;
+            point_unassigned[start+1] = false;
+            continue;
+        }
+        
+        let mut new_ls = vec![];
+        point_unassigned[start] = false;
+        //points[start..end].iter_mut().map( set to true here? )
+        new_ls.push(points[start].clone());
+        for i in start+1..end {
+            println!("looking at point i {} {:?}, point_unassigned[i] {:?}", i, points[i], point_unassigned[i]);
+            if point_unassigned[i] {
+                println!("\tadding point");
+                new_ls.push(points[i].clone());
+                point_unassigned[i] = false;
+            }
+        }
+        if new_ls.len() > 2 {
+            // Any outer loops need at least one point at this, so don't save it
+            //point_unassigned[end] = false;
+            new_ls.push(points[end].clone());
+            println!("adding ls {:?}", new_ls);
+            results.push(LineString(new_ls));
+        } else {
+            println!("too short");
+        }
+    }
+
+    println!("point_unassigned {:?}", point_unassigned);
+    // There will always be the last/first point unassigned since we keep the end around, which
+    // means the endpoint of the outer ring is kept. So they should all be false, except the last
+    // which is true
+    debug_assert!(point_unassigned.iter().take(point_unassigned.len()-1).all(|x| !x));
+    debug_assert!(point_unassigned[point_unassigned.len()-1]);
+
+    results
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -335,13 +592,14 @@ mod test {
     fn intersect1() {
 
         assert_eq!(intersection(0, 0,  0, 10,  5, 1,  5, 2), Intersection::None);
-        assert_eq!(intersection(0, 0,  0, 10,  0, 5,  5, 5), Intersection::Touching);
+        assert_eq!(intersection(0, 0,  0, 10,  0, 5,  5, 5), Intersection::Touching((0, 5)));
 
-        assert_eq!(intersection(0, 0,  0, 10,  0, 0,  0, 10), Intersection::Overlapping);
-        assert_eq!(intersection(0, 0,  0, 10,  0, 5,  0, 10), Intersection::Overlapping);
-        assert_eq!(intersection(0, 0,  0, 10,  0, 5,  0, 15), Intersection::Overlapping);
-        assert_eq!(intersection(0, 0,  0, 10,  0, 0,  0, 5), Intersection::Overlapping);
-        assert_eq!(intersection(0, 0,  0, 10,  0, 2,  0, 8), Intersection::Overlapping);
+        assert_eq!(intersection(0, 0,  0, 10,  0, 0,  0, 10), Intersection::Overlapping((0, 0), (0, 10)));
+        assert_eq!(intersection(0, 0,  0, 10,  0, 5,  0, 10), Intersection::Overlapping((0, 5), (0, 10)));
+        assert_eq!(intersection(0, 0,  0, 10,  0, 5,  0, 15), Intersection::Overlapping((0, 5), (0, 10)));
+        assert_eq!(intersection(0, 0,  0, 10,  0, 0,  0, 5), Intersection::Overlapping((0, 0), (0, 5)));
+        assert_eq!(intersection(0, 0,  0, 10,  0, 2,  0, 8), Intersection::Overlapping((0, 2), (0, 8)));
+        assert_eq!(intersection(0,2, 0,8,  0,0, 0,10), Intersection::Overlapping((0, 2), (0, 8)));
 
         assert_eq!(intersection(0, 0, 0, 10,  0, 10,  1, 20), Intersection::EndToEnd);
         assert_eq!(intersection(0, 0, 0, 10,  0, 10,  0, 20), Intersection::EndToEnd);
@@ -364,11 +622,16 @@ mod test {
         assert_eq!(intersection(0, 0, 0, 10,  1, 10,  1, 20), Intersection::None);
         assert_eq!(intersection(0, 0, 0, 10,  1, 20,  1, 40), Intersection::None);
 
-        assert_eq!(intersection(0, 0,  0, 10,  -5, 5,  5, 5), Intersection::Crossing);
-        assert_eq!(intersection(0, 0,  10, 0,  10, 0,  10, 10), Intersection::EndToEnd);
-        assert_eq!(intersection(-5, 5,  5, 5,  0, 0,  0, 10), Intersection::Crossing);
-        assert_eq!(intersection(0, 0,  10, 0,  5, 10,  5, -10), Intersection::Crossing);
+        assert_eq!(intersection(0, 0,  0, 10,  -5, 5,  5, 5), Intersection::Crossing((0, 5)));
+        assert_eq!(intersection(0, 0,  0, 10,  -5, 1,  5, 1), Intersection::Crossing((0, 1)));
 
+        assert_eq!(intersection(0, 0,  10, 0,  10, 0,  10, 10), Intersection::EndToEnd);
+        assert_eq!(intersection(-5, 5,  5, 5,  0, 0,  0, 10), Intersection::Crossing((0, 5)));
+        assert_eq!(intersection(0, 0,  10, 0,  5, 10,  5, -10), Intersection::Crossing((5, 0)));
+
+        // Rounded down to the nearest whole number in the coordinate system
+        // They meet at (0.5, 0.5), so that's rounded to (1, 1)
+        assert_eq!(intersection(0,0, 1,1,  1,0, 0,1), Intersection::Crossing((1, 1)));
     }
 
     #[test]
@@ -385,15 +648,50 @@ mod test {
     }
 
     #[test]
+    fn intersect3() { assert_eq!(intersection(4,0, 2,-1,  2,1, 0,0), Intersection::None); }
+
+    #[test]
+    fn intersect4() {
+        assert_eq!(intersection(0,0, 4,0,  2,-1, 2,0), Intersection::Touching((2, 0)));
+        assert_eq!(intersection(0,0, 4,0,  2,0, 2,1), Intersection::Touching((2, 0)));
+
+        assert_eq!(intersection(2,-1, 2,0,  0,0, 4,0), Intersection::Touching((2, 0)));
+        assert_eq!(intersection(2,0, 2,1,  0,0, 4,0), Intersection::Touching((2, 0)));
+    }
+
+    #[test]
+    fn intersect5() {
+        assert_eq!(intersection(0,0, 4,0,  1,-1, 1,1), Intersection::Crossing((1, 0)));
+        assert_eq!(intersection(0,0, 4,0,  2,-1, 2,1), Intersection::Crossing((2, 0)));
+    }
+
+    #[test]
+    fn intersect6() {
+        // bbox overlaps, and they have the same slope, but they don't touch
+        assert_eq!(intersection(0,0, 10,10,  1,2, 6,7), Intersection::None);
+        assert_eq!(intersection(1,2, 6,7,  0,0, 10,10), Intersection::None);
+        assert_eq!(intersection(10,10, 0,0,  6,7, 1,2), Intersection::None);
+        assert_eq!(intersection(6,7, 1,2,  10,10, 0,0), Intersection::None);
+    }
+
+    #[test]
+    fn intersect7() {
+        // bbox overlaps, but they don't have the same slope
+        assert_eq!(intersection(0,0, 10,10,  1,2, 1,5), Intersection::None);
+    }
+
+    #[test]
     fn validity_checks() {
         let geom: LineString<i32> = LineString(vec![]);
         assert!(!is_linestring_valid(&geom));
 
         assert!(!is_linestring_valid(&LineString(vec![(0i32, 0i32).into()])));
 
-        assert!(!is_linestring_valid(&vec![(0, 0), (4, 0), (2, -1), (2, 1)].into()));
-        // TODO fix
-        //assert!(!is_linestring_valid(&vec![(0, 0), (4, 0), (2, -1), (2, 0), (2, 1)].into()));
+        // Linestrings can self-intersect
+        assert!(is_linestring_valid(&vec![(0, 0), (4, 0), (2, -1), (2, 1)].into()));
+
+        assert!(has_self_intersections(&vec![(0, 0), (4, 0), (2, -1), (2, 1), (0,0)].into()));
+        assert!(has_self_intersections(&vec![(0, 0), (4, 0), (2, -1), (2, 0), (2, 1), (0,0)].into()));
 
         // Simple square - valid
         assert!(is_polygon_valid(&Polygon::new(vec![(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)].into(), vec![])));
@@ -416,5 +714,131 @@ mod test {
         assert!(is_polygon_valid(&new_geom));
         assert_eq!(new_geom, Polygon::new(vec![(0, 0), (0, 4), (3, 4), (3, 0), (0, 0)].into(), vec![vec![(1, 1), (2, 1), (2, 3), (1, 3), (1, 1)].into()]));
     }
+
+    // Helper function that tests that applying func to in_obj doesn't result in in_obj changing
+    fn test_no_change<T, F>(func: F, mut in_obj: T)
+        where F: Fn(&mut T), T: Clone+Debug+PartialEq
+    {
+        let out_obj = in_obj.clone();
+        expected_results(func, in_obj, out_obj);
+    }
+
+    fn expected_results<T, F>(func: F, mut in_obj: T, out_obj: T)
+        where F: Fn(&mut T), T: Debug+PartialEq
+    {
+        func(&mut in_obj);
+        assert_eq!(in_obj, out_obj);
+    }
+
+    fn test_no_change_own_vec<T, F>(func: F, mut in_obj: T)
+        where F: Fn(T)->Vec<T>, T: Clone+Debug+PartialEq
+    {
+        let expected_out = vec![in_obj.clone()];
+        let out = func(in_obj);
+        assert_eq!(out, expected_out);
+    }
+
+
+    #[test]
+    fn test_add_points_for_all_crossings1() {
+        test_no_change(add_points_for_all_crossings, LineString(vec![(0i32, 0i32).into()]));
+        test_no_change(add_points_for_all_crossings, vec![(0, 0), (4, 0), (2, -1)].into());
+        test_no_change(add_points_for_all_crossings, vec![(0, 0), (2, 0), (4, 0), (2, -1), (2, 0), (2, 1), (0,0)].into());
+
+        expected_results(add_points_for_all_crossings, vec![(0, 0), (4, 0), (2, -1), (2, 0), (2, 1), (0,0)].into(), vec![(0, 0), (2, 0), (4, 0), (2, -1), (2, 0), (2, 1), (0,0)].into());
+        expected_results(add_points_for_all_crossings, vec![(0, 0), (4, 0), (2, -1), (2, 1)].into(), vec![(0, 0), (2, 0), (4, 0), (2, -1), (2, 0), (2, 1)].into());
+    }
+
+    #[test]
+    fn test_dissolve_into_rings1() {
+        test_no_change_own_vec(dissolve_into_rings, vec![(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)].into());
+
+        // This polygon touches at a point (d). it should be 2 polygons
+        //   a-b
+        //   | |
+        // g-d-c
+        // | |
+        // f-e
+        let a = Point::new(2, 0); let b = Point::new(4, 0); let c = Point::new(4, 6);
+        let d = Point::new(2, 4);
+        let e = Point::new(2, 6); let f = Point::new(0, 6); let g = Point::new(0, 4);
+        // sanity check
+        assert!(is_polygon_valid(&Polygon::new(vec![a, d, e, b, a].into(), vec![])));
+        assert!(is_polygon_valid(&Polygon::new(vec![d, g, f, e, d].into(), vec![])));
+
+        let ls = vec![a, d, g, f, e, d, c, b, a].into();
+
+        let result = dissolve_into_rings(ls);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], vec![d, g, f, e, d].into());
+        assert_eq!(result[1], vec![a, d, c, b, a].into());
+        
+        assert_eq!(result, vec![
+                   vec![d, g, f, e, d].into(),
+                   vec![a, d, c, b, a].into(),
+                   ] );
+
+    }
+
+    #[test]
+    fn test_dissolve_into_rings2() {
+        let a = Point::new(0, 0); let b = Point::new(2, 0); let c = Point::new(3, 0);
+        let d = Point::new(1, 1);
+
+        // a---b--c
+        //  \ /
+        //   d
+        
+        // a-b-a Just the spike
+        assert_eq!(dissolve_into_rings(LineString(vec![a, b, a])), vec![]);
+
+        // Triangle (a-b-d-a) is kept, the little spike (b-c-b) is removed.
+        assert_eq!(dissolve_into_rings(LineString(vec![a, b, c, b, d, a])), vec![ vec![a, b, d, a].into(), ]);
+
+    }
+
+    #[test]
+    fn test_dissolve_into_rings3() {
+        let a = Point::new(0, 0); let c = Point::new(2, 0);
+        let b = Point::new(1, 1); let d = Point::new(2, 1);
+        let e = Point::new(1, 2); let f = Point::new(2, 2);
+
+        // a----c
+        //  \ / |
+        //   b--d
+        //   |  |
+        //   e--f
+        // Triangle abc is filled in, bcd isn't. cdef is a square that's filled in.
+        // Ideally we want 2 rings abdefca and bcdb
+
+        let result = dissolve_into_rings(LineString(vec![a, b, c, d, b, e, f, d, c, a]));
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], vec![b, c, d, b].into());
+        assert_eq!(result[1], vec![a, b, e, f, d, c, a].into());
+    }
+
+    #[test]
+    fn test_dissolve_into_rings4() {
+        // a-----b
+        // | g-h |
+        // e-f | |
+        // | j-i |
+        // d-----c
+
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+        let e = Point::new(0, 2); let f = Point::new(2, 2);
+        let g = Point::new(2, 1); let h = Point::new(4, 1);
+        let i = Point::new(4, 3); let j = Point::new(2, 3);
+
+
+        let result = dissolve_into_rings(LineString(vec![a, b, c, d, e, f, g, h, i, j, f, e, a]));
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], vec![f, g, h, i, j, f].into());
+        assert_eq!(result[1], vec![a, b, c, d, e, a].into());
+    }
+
+
+
 }
 
