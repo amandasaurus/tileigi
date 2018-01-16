@@ -1,7 +1,8 @@
 use geo::*;
 use geo::map_coords::MapCoords;
 use geo::intersects::Intersects;
-use std::cmp::{min, max, Ord};
+use std::cmp::{min, max, Ord, Ordering};
+use std::ops::{Add, Sub};
 use std::collections::HashMap;
 use num_traits::Signed;
 use std::fmt::Debug;
@@ -379,19 +380,57 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
     unreachable!();
 }
 
-pub fn make_valid<T: CoordinateType>(geom: Geometry<T>) -> Geometry<T> {
+pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(geom: Geometry<T>) -> Geometry<T> {
     match geom {
         Geometry::Polygon(p) => Geometry::MultiPolygon(make_polygon_valid(p)),
-        Geometry::MultiPolygon(mp) => {
-            unimplemented!();
-        },
+        Geometry::MultiPolygon(mp) => Geometry::MultiPolygon(make_multipolygon_valid(mp)),
         x => x,
     }
 }
 
-fn make_polygon_valid<T: CoordinateType>(p: Polygon<T>) -> MultiPolygon<T> {
-    MultiPolygon(vec![])
+fn make_multipolygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut mp: MultiPolygon<T>) -> MultiPolygon<T> {
+    let MultiPolygon( polygons ) = mp;
 
+    let rings: Vec<LineString<T>> = polygons.into_iter().flat_map(|p| {
+        let Polygon{ exterior, interiors } = p;
+        let mut these_rings = interiors;
+        these_rings.insert(0, exterior);
+        these_rings.into_iter()
+    }).collect();
+
+
+    make_rings_valid(rings)
+}
+
+fn make_polygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut p: Polygon<T>) -> MultiPolygon<T> {
+    let Polygon{ exterior, interiors } = p;
+    let mut rings = interiors;
+    rings.insert(0, exterior);
+
+    make_rings_valid(rings)
+
+}
+
+fn make_rings_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut rings: Vec<LineString<T>>) -> MultiPolygon<T> {
+
+    let rings: Vec<LineString<T>> = rings.into_iter().flat_map(|mut ring| {
+        add_points_for_all_crossings(&mut ring);
+        let these_rings = dissolve_into_rings(ring);
+        these_rings.into_iter()
+    }).collect();
+
+    
+    let result = convert_rings_to_polygons(rings);
+
+    // This takes a geom, so we do a dance
+    let mut result = Geometry::MultiPolygon(result);
+    ensure_polygon_orientation(&mut result);
+
+    if let Geometry::MultiPolygon(mp) = result {
+        return mp;
+    } else {
+        unreachable!()
+    }
 }
 
 
@@ -402,10 +441,10 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
     if ls.0.len() <= 3 {
         return;
     }
-    //println!("\n\nXXX\nls {:?}\n", ls);
+    println!("\n\nXXX\nls {:?}\n", ls);
 
     loop {
-        //println!("\nStart of loop\n{:?}", ls.0);
+        println!("\nStart of loop\n{:?}", ls.0);
         let mut coords_to_insert = HashMap::new();
         // Keys are the point indexes.
         // Values are a Vec of new points to add after the point with that index.
@@ -428,13 +467,41 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     Intersection::None | Intersection::EndToEnd => {},
 
                     Intersection::Crossing((x0, y0)) => {
-                        //println!("i {} j {} crossing {:?},{:?}", i, j, x0, y0);
+                        println!("i {} j {} crossing {:?},{:?}", i, j, x0, y0);
                         coords_to_insert.entry(i).or_insert(vec![]).push((x0, y0));
                         coords_to_insert.entry(j).or_insert(vec![]).push((x0, y0));
                     },
-                    Intersection::Overlapping(_, _)  => unimplemented!(),
+
+                    Intersection::Overlapping(overlap1, overlap2)  => {
+                        println!("i {} j {} overlapping {:?},{:?}", i, j, overlap1, overlap2);
+                        let (overlap1, overlap2) = order_points( ((x1, y1), (x2, y2)), overlap1, overlap2);
+
+                        if overlap1 == (x1, y1) && overlap2 == (x2, y2) {
+                            // complete overlap, we don't have to do anything
+                            // and if we do, we'll get infinite loops
+                        } else {
+                            // we know p1 comes before p2 when going "along the line" now
+                            
+                            // Some of the end points will be the same as the overlap points, so don't
+                            // add them, otherwise that'll cause duplicate points
+                            if (x1, y1) != overlap1 {
+                                coords_to_insert.entry(i).or_insert(vec![]).push(overlap1);
+                            }
+                            if (x2, y2) != overlap2 {
+                                coords_to_insert.entry(i).or_insert(vec![]).push(overlap2);
+                            }
+
+                            if (x3, y3) != overlap1 {
+                                coords_to_insert.entry(j).or_insert(vec![]).push(overlap1);
+                            }
+                            if (x4, y4) != overlap2 {
+                                coords_to_insert.entry(j).or_insert(vec![]).push(overlap2);
+                            }
+                        }
+                    },
+
                     Intersection::Touching((x0, y0)) => {
-                        //println!("i {} j {} touching {:?},{:?}", i, j, x0, y0);
+                        println!("i {} j {} touching {:?},{:?}", i, j, x0, y0);
                         // (x0, y0) is the point where they touch
                         if (x1,y1) == (x0,y0) || (x2,y2) == (x0,y0) {
                             // touching point is at end of line12, ergo it's in the middle of line34
@@ -465,8 +532,8 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
             coords_to_insert.sort();
             let coords_to_insert = coords_to_insert;
 
-            //println!("line {:?}", ls);
-            //println!("coords_to_insert {:?}", coords_to_insert);
+            println!("line {:?}", ls);
+            println!("coords_to_insert {:?}", coords_to_insert);
 
             for (point_idx, new_points) in coords_to_insert.into_iter() {
                 for new_point in new_points.into_iter() {
@@ -528,7 +595,7 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
     // on, this sort-by-length should do it (since an outer loop will be longer than the inner one
     // it contains)
     loops.sort_by_key(|i| (i[1]-i[0], i[0]));
-    println!("loops {:?}", loops);
+    //println!("loops {:?}", loops);
 
     // FIXME fix this
     //assert!(loops.len() == 2);
@@ -540,7 +607,7 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
             // this has already been removed earlier in another loop
             continue;
         }
-        println!("loop from {:?} to {:?}", start, end);
+        //println!("loop from {:?} to {:?}", start, end);
 
         if start + 2 == end {
             // This is only 3 points, so it's a little spike
@@ -555,9 +622,9 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
         //points[start..end].iter_mut().map( set to true here? )
         new_ls.push(points[start].clone());
         for i in start+1..end {
-            println!("looking at point i {} {:?}, point_unassigned[i] {:?}", i, points[i], point_unassigned[i]);
+            //println!("looking at point i {} {:?}, point_unassigned[i] {:?}", i, points[i], point_unassigned[i]);
             if point_unassigned[i] {
-                println!("\tadding point");
+                //println!("\tadding point");
                 new_ls.push(points[i].clone());
                 point_unassigned[i] = false;
             }
@@ -566,14 +633,14 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
             // Any outer loops need at least one point at this, so don't save it
             //point_unassigned[end] = false;
             new_ls.push(points[end].clone());
-            println!("adding ls {:?}", new_ls);
+            //println!("adding ls {:?}", new_ls);
             results.push(LineString(new_ls));
         } else {
-            println!("too short");
+            //println!("too short");
         }
     }
 
-    println!("point_unassigned {:?}", point_unassigned);
+    //println!("point_unassigned {:?}", point_unassigned);
     // There will always be the last/first point unassigned since we keep the end around, which
     // means the endpoint of the outer ring is kept. So they should all be false, except the last
     // which is true
@@ -581,6 +648,228 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
     debug_assert!(point_unassigned[point_unassigned.len()-1]);
 
     results
+}
+
+/// Possible return values from does_ray_cross
+#[derive(PartialEq,Eq,Debug)]
+enum Crossing {
+    /// Definitly no overlap
+    No,
+
+    /// There is a specific overlap
+    Yes,
+
+    /// The point is on the line segment
+    Touches
+}
+
+/// An infinite line from point to the left (ie negative infitity in the x direction), does that
+/// line intersect with the line segment from p1-p2?
+fn does_ray_cross<T: CoordinateType+Debug+Ord>(point: &Point<T>, p1: &Point<T>, p2: &Point<T>) -> Crossing {
+    let (x, y) = (point.x(), point.y());
+    assert!(p1 != p2);
+    let (x1, y1) = (p1.x(), p1.y());
+    let (x2, y2) = (p2.x(), p2.y());
+
+    println!("x {:?} y {:?} x1 {:?} y1 {:?} x2 {:?} y2 {:?}", x, y, x1, y1, x2, y2);
+    if (x == x1 && y == y1) || (x == x2 && y == y2) {
+        return Crossing::Touches;
+    }
+
+    if y1 > y && y2 > y {
+        // Line segment is above the point
+        return Crossing::No;
+    } else if y1 < y && y2 < y {
+        // Line segment is below the point
+        return Crossing::No;
+    } else if x1 > x && x2 > x {
+        // Line segment is to the right of the point
+        return Crossing::No;
+    } else if (y1 > y && y2 < y) || (y1 < y && y2 > y) {
+        // proper crossing
+        return Crossing::Yes;
+    } else if y1 == y && y2 == y && x1 < x && x2 < x {
+        // This line lies on the ray
+        return Crossing::Touches;
+    }
+
+    unreachable!();
+}
+
+
+#[derive(PartialEq,Eq,Debug)]
+enum RingType { Exterior, Interior }
+
+/// ring is at index `ring_type` in `all_rings`
+fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index: usize, all_rings: &Vec<LineString<T>>) -> RingType {
+    // Do an even/odd check on a point in `ring` on all rings in all_rings. except this one (that's
+    // why we need ring_index. If the point is inside, then this is an interior ring, else
+    // exterior.
+    // We pick the first point in ring, but if we get a "touch" relation against any other ring, we
+    // just move on to another point.
+    // We assume that a ring is either entirely inside, or entirely outside another ring. There are
+    // no "partially overlapping" rings.
+    let point = ring.0[0];
+    let mut num_crossings = 0;
+
+    'start_point: for point in ring.0.iter() {
+        num_crossings = 0;
+
+        
+        // loop over all the rings
+        for (i, ring) in all_rings.iter().enumerate() {
+            if i == ring_index { continue; }
+
+            // then all the segments in this ring
+            for other_points in ring.0.windows(2) {
+                debug_assert!(other_points.len() == 2);
+
+                match does_ray_cross(&point, &other_points[0], &other_points[1]) {
+                    Crossing::Yes => { num_crossings += 1 },
+                    Crossing::No => {},
+                    Crossing::Touches => {
+                        // Go back and choose a new start point
+                        continue 'start_point;
+                    }
+                }
+            }
+        }
+
+        // If we've gotten to here, this start point is good.
+        break 'start_point;
+    }
+
+    if num_crossings % 2 == 0 {
+        RingType::Exterior
+    } else {
+        RingType::Interior
+    }
+
+}
+
+fn calc_rings_ext_int<T: CoordinateType+Debug+Ord>(rings: Vec<LineString<T>>) -> Vec<(LineString<T>, RingType)> {
+    let ring_types: Vec<RingType> = rings.iter().enumerate().map(|(i, r)| is_ring_ext_int(&r, i, &rings) ).collect();
+
+    rings.into_iter().zip(ring_types.into_iter()).collect()
+
+
+}
+
+/// This will look at what rings are inside other rings.
+fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineString<T>>) -> MultiPolygon<T> {
+    if rings.is_empty() {
+        return MultiPolygon(vec![]);
+    }
+    if rings.len() == 1 {
+        return MultiPolygon(vec![Polygon::new(rings.remove(0), vec![])]);
+    }
+
+    let rings_with_type = calc_rings_ext_int(rings);
+
+    // Do a simple case when there are only 2 rings?
+    let mut exteriors = Vec::new();
+    let mut interiors = Vec::new();
+
+    for (ring, ring_type) in rings_with_type.into_iter() {
+        match ring_type {
+            RingType::Exterior => {
+                exteriors.push(ring);
+            },
+            RingType::Interior => {
+                interiors.push(ring);
+            },
+        }
+    }
+    assert!(!(exteriors.is_empty() && interiors.is_empty()));
+
+    // All interiours?!
+    assert!(!exteriors.is_empty());
+
+    let mut polygons: Vec<_> = exteriors.into_iter().map(|p| Polygon::new(p, vec![])).collect();
+
+    // we need to calculate the what exterior that each interior is in
+    
+    if polygons.len() == 1 {
+        // There is only one exterior ring, so take a simple approach of assuming all the
+        // interiors are part of that
+        ::std::mem::swap(&mut polygons[0].interiors, &mut interiors);
+        
+    } else {
+        if interiors.is_empty() {
+            // nothing to do
+        } else {
+            // we need to figure out which exterior each interior is in.
+            eprintln!("polygons {:?}", polygons);
+            unimplemented!()
+        }
+    }
+
+
+    MultiPolygon(polygons)
+}
+
+/// Given a line defined by 2 points, and 2 other points (p1 & p2) which were assume are on the
+/// line, return the 2 points, but ordered, so that going from the start of the line you hit p1 and
+/// then p2, and then the end of the line
+fn order_points<T: CoordinateType+Debug+Sub<Output=T>+Ord>(line: ((T, T), (T, T)), p1: (T, T), p2: (T, T)) -> ((T, T), (T, T)) {
+    assert!(p1 != p2);
+    assert!(line.0 != line.1);
+
+    fn sub<T: CoordinateType+Ord+Sub<Output=T>>(a: (T, T), b: (T, T)) -> (T, T) {
+        (
+            match a.0.cmp(&b.0) {
+                Ordering::Equal => T::zero(),
+                Ordering::Greater => (a.0 - b.0),
+                Ordering::Less => (b.0 - a.0),
+            },
+            match a.1.cmp(&b.1) {
+                Ordering::Equal => T::zero(),
+                Ordering::Greater => (a.1 - b.1),
+                Ordering::Less => (b.1 - a.1),
+            },
+
+        )
+    }
+
+    fn add<T: Add<Output=T>>(a: (T, T), b: (T, T), c: (T, T)) -> (T, T) {
+        (a.0+b.0+c.0, a.1+b.1+c.1)
+    }
+
+    // we 'abs' all the slopes so that the line is entirely in the first quarter
+    // (delta x, delta y)
+    let slope_line = sub(line.1, line.0);
+
+    // slope from the start point to p1
+    let slope_start_1 = sub(p1, line.0);//(p1.0 - (line.0).0, p1.1 - (line.0).1);
+
+    // slope from the start point to p2
+    let slope_start_2 = sub(p2, line.0);//(p2.0 - (line.0).0, p2.1 - (line.0).1);
+    
+    // slope from p1 to p2
+    let slope_1_2 = sub(p2, p1);//(p2.0 - p1.0, p2.1 - p1.1);
+
+    // slope from p2 to p1
+    let slope_2_1 = sub(p1, p2);
+
+    // slope from p2 to the end
+    let slope_2_end = sub(line.1, p2);//((line.1).0 - p2.0, (line.1).1 - p2.1);
+    let slope_1_end = sub(line.1, p1);
+
+    if add(slope_start_1, slope_1_2, slope_2_end) == slope_line {
+        (p1, p2)
+    } else if add(slope_start_2, slope_2_1, slope_1_end) == slope_line {
+        (p2, p1)
+    } else {
+        // this shouldn't happen
+        // Probably happens when p1 and/or p2 aren't on the line
+        eprintln!("line {:?} p1 {:?} p2 {:?}", line, p1, p2);
+        eprintln!("slone_line {:?}", slope_line);
+        eprintln!("slope_start_1 {:?} slope_start_2 {:?}", slope_start_1, slope_start_2);
+        eprintln!("slope_1_2 {:?} slope_2_1 {:?}", slope_1_2, slope_2_1);
+        eprintln!("slope_2_end {:?}", slope_2_end);
+        unreachable!();
+    }
+
 }
 
 
@@ -704,7 +993,19 @@ mod test {
     }
     
     #[test]
-    fn test_make_valid() {
+    fn test_make_valid1() {
+        let unit_square = vec![(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)];
+        let geom: Polygon<i32> = Polygon::new(unit_square.clone().into(), vec![]);
+        
+        let mut new_geom = make_polygon_valid(geom);
+        assert_eq!(new_geom.0.len(), 1);
+        let new_geom: Polygon<_> = new_geom.0.remove(0);
+        assert!(is_polygon_valid(&new_geom));
+        assert_eq!(new_geom.exterior, unit_square.into());
+    }
+
+    #[test]
+    fn test_make_valid2() {
         let geom: Polygon<i32> = Polygon::new(vec![(0, 0), (0, 2), (1, 2), (1, 1), (2, 1), (2, 3), (1, 3), (1, 2), (0, 2), (0, 4), (3, 4), (3, 0), (0, 0)].into(), vec![]);
         assert!(!is_polygon_valid(&geom));
         
@@ -713,6 +1014,93 @@ mod test {
         let new_geom: Polygon<_> = new_geom.0.remove(0);
         assert!(is_polygon_valid(&new_geom));
         assert_eq!(new_geom, Polygon::new(vec![(0, 0), (0, 4), (3, 4), (3, 0), (0, 0)].into(), vec![vec![(1, 1), (2, 1), (2, 3), (1, 3), (1, 1)].into()]));
+    }
+
+    #[test]
+    fn test_make_valid3() {
+        // a-----b
+        // | g-h |
+        // | | | |
+        // | j-i |
+        // d-----c
+
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+        let g = Point::new(2, 1); let h = Point::new(4, 1);
+        let i = Point::new(4, 3); let j = Point::new(2, 3);
+        
+        let p = Polygon::new(vec![a, d, c, b, a].into(), vec![vec![g, h, i, j, g].into()]);
+        assert!(is_polygon_valid(&p));
+        let original = p.clone();
+
+        let mut p: MultiPolygon<_> = make_polygon_valid(p);
+        assert_eq!(p.0.len(), 1);
+        let p: Polygon<_> = p.0.remove(0);
+        assert!(is_polygon_valid(&p));
+        assert_eq!(p, original);
+    }
+
+    #[test]
+    fn test_make_valid4() {
+        // a-----b
+        // | g-h |
+        // | | | |
+        // | j-i |
+        // d-----c
+
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+        let g = Point::new(2, 1); let h = Point::new(4, 1);
+        let i = Point::new(4, 3); let j = Point::new(2, 3);
+        
+
+        // Same but the inner 
+        let p_outer = Polygon::new(vec![a, d, c, b, a].into(), vec![]);
+        assert!(is_polygon_valid(&p_outer));
+        let p_inner = Polygon::new(vec![g, j, i, h, g].into(), vec![]);
+        assert!(is_polygon_valid(&p_inner));
+        let mp = MultiPolygon(vec![p_outer.clone(), p_inner.clone()]);
+
+        let mut new_mp = match make_valid(mp.into()) {
+            Geometry::MultiPolygon(x) => x,
+            _ => unreachable!(),
+        };
+
+        println!("{:?}", new_mp);
+        assert_eq!(new_mp.0.len(), 1);
+        let poly = new_mp.0.remove(0);
+        assert_eq!(poly.exterior, vec![a, d, c, b, a].into());
+        assert_eq!(poly.interiors.len(), 1);
+        assert_eq!(poly.interiors[0], vec![g, h, i, j, g].into());
+
+    }
+
+    #[test]
+    fn test_make_valid5() {
+        // This polygon touches at a point (d). it should be 2 polygons
+        //   a-b
+        //   | |
+        // g-d-c
+        // | |
+        // f-e
+        let a = Point::new(2, 0); let b = Point::new(4, 0); let c = Point::new(4, 6);
+        let d = Point::new(2, 4);
+        let e = Point::new(2, 6); let f = Point::new(0, 6); let g = Point::new(0, 4);
+        // sanity check
+        assert!(is_polygon_valid(&Polygon::new(vec![a, d, c, b, a].into(), vec![])));
+        assert!(is_polygon_valid(&Polygon::new(vec![d, g, f, e, d].into(), vec![])));
+
+        let poly = Polygon::new(vec![a, d, g, f, e, d, c, b, a].into(), vec![]);
+        //assert!(!is_polygon_valid(&poly));
+
+        let new_mp: MultiPolygon<_> = make_polygon_valid(poly);
+
+        assert_eq!(new_mp.0.len(), 2);
+        assert_eq!(new_mp.0[0], Polygon::new(vec![a, d, c, b, a].into(), vec![]));
+        assert!(is_polygon_valid(&new_mp.0[0]));
+        assert_eq!(new_mp.0[1], Polygon::new(vec![d, e, f, e, d].into(), vec![]));
+        assert!(is_polygon_valid(&new_mp.0[1]));
+
     }
 
     // Helper function that tests that applying func to in_obj doesn't result in in_obj changing
@@ -747,6 +1135,27 @@ mod test {
 
         expected_results(add_points_for_all_crossings, vec![(0, 0), (4, 0), (2, -1), (2, 0), (2, 1), (0,0)].into(), vec![(0, 0), (2, 0), (4, 0), (2, -1), (2, 0), (2, 1), (0,0)].into());
         expected_results(add_points_for_all_crossings, vec![(0, 0), (4, 0), (2, -1), (2, 1)].into(), vec![(0, 0), (2, 0), (4, 0), (2, -1), (2, 0), (2, 1)].into());
+    }
+
+    #[test]
+    fn test_add_points_for_all_crossings2() {
+        expected_results(add_points_for_all_crossings, vec![(0, 0), (10, 0), (5, 0), (5, 10), (0, 0)].into(), vec![(0, 0), (5, 0), (10, 0), (5, 0), (5, 10), (0, 0)].into());
+    }
+    #[test]
+    fn test_add_points_for_all_crossings3() {
+        expected_results(add_points_for_all_crossings, vec![(0, 0), (10, 0), (-2, 0), (-2, 10), (0, 0)].into(), vec![(0, 0), (10, 0), (0, 0), (-2, 0), (-2, 10), (0, 0)].into());
+    }
+    #[test]
+    fn test_add_points_for_all_crossings4() {
+        expected_results(add_points_for_all_crossings,
+                         vec![(0, 0), (100, 0), (100, 100), (70, 0), (50, 0), (0, 100), (0, 0)].into(),
+                         vec![(0, 0), (50, 0), (70, 0), (100, 0), (100, 100), (70, 0), (50, 0), (0, 100), (0, 0)].into() );
+    }
+    #[test]
+    fn test_add_points_for_all_crossings5() {
+        expected_results(add_points_for_all_crossings,
+                         vec![(0, 0), (100, 0), (110, 100), (110, 0), (50, 0), (0, 100), (0, 0)].into(),
+                         vec![(0, 0), (50, 0), (100, 0), (110, 100), (110, 0), (100, 0), (50, 0), (0, 100), (0, 0)].into() );
     }
 
     #[test]
@@ -838,7 +1247,109 @@ mod test {
         assert_eq!(result[1], vec![a, b, c, d, e, a].into());
     }
 
+    #[test]
+    fn convert_rings_to_polygons1() {
+        assert_eq!(convert_rings_to_polygons(Vec::<LineString<i32>>::new()), MultiPolygon(vec![]));
 
+        let unit_square = vec![(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)];
+        assert_eq!(convert_rings_to_polygons(vec![unit_square.clone().into()]), MultiPolygon(vec![Polygon::new(unit_square.into(), vec![])]));
+    }
+
+    #[test]
+    fn convert_rings_to_polygons2() {
+        // a-----b
+        // | g-h |
+        // e f | |
+        // | j-i |
+        // d-----c
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+        let e = Point::new(0, 2); let f = Point::new(2, 2);
+        let g = Point::new(2, 1); let h = Point::new(4, 1);
+        let i = Point::new(4, 3); let j = Point::new(2, 3);
+
+
+        let outer: LineString<_> = vec![a, b, c, d, e, a].into();
+        let inner: LineString<_> = vec![g, h, i, j, f, g].into();
+        let rings = vec![ outer.clone(), inner.clone() ];
+
+        assert_eq!(convert_rings_to_polygons(rings), MultiPolygon(vec![Polygon::new(outer, vec![inner])]));
+    }
+
+    #[test]
+    fn does_ray_cross1() {
+        fn know_answer((x1, y1): (i32, i32), (x2, y2): (i32, i32), res: Crossing) {
+            assert_eq!(does_ray_cross(&(0,0).into(), &(x1, y1).into(), &(x2, y2).into()), res, "({:?}, {:?}), ({:?}, {:?}) {:?}", x1, y1, x2, y2, res);
+        }
+
+        know_answer((1, 1), (10, 10), Crossing::No);
+        know_answer((1, 0), (2, 0), Crossing::No);
+        know_answer((-10, 10), (-10, 20), Crossing::No);
+        know_answer((-10, -10), (-10, -20), Crossing::No);
+
+        know_answer((0, 0), (10, 10), Crossing::Touches);
+        know_answer((10, 1), (0, 0), Crossing::Touches);
+        know_answer((-10, 0), (-5, 0), Crossing::Touches);
+
+        know_answer((-10, 10), (-10, -10), Crossing::Yes);
+        know_answer((-10, 10), (-10, -10), Crossing::Yes);
+
+    }
+
+    #[test]
+    fn calc_rings_ext_int1() {
+        // a-----b
+        // | g-h |
+        // e-f | |
+        // | j-i |
+        // d-----c
+
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+        let e = Point::new(0, 2); let f = Point::new(2, 2);
+        let g = Point::new(2, 1); let h = Point::new(4, 1);
+        let i = Point::new(4, 3); let j = Point::new(2, 3);
+        
+        let unit_square: LineString<_> = vec![a, b, c, d, a].into();
+        let result = calc_rings_ext_int(vec![unit_square.clone()]);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, unit_square);
+        assert_eq!(result[0].1, RingType::Exterior);
+
+        let inner_square: LineString<_> = vec![g, h, i, j, g].into();
+        let result = calc_rings_ext_int(vec![unit_square.clone(), inner_square.clone()]);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].0, unit_square);
+        assert_eq!(result[0].1, RingType::Exterior);
+        assert_eq!(result[1].0, inner_square);
+        assert_eq!(result[1].1, RingType::Interior);
+
+        // same but with other order
+        let result = calc_rings_ext_int(vec![inner_square.clone(), unit_square.clone()]);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].0, inner_square);
+        assert_eq!(result[0].1, RingType::Interior);
+        assert_eq!(result[1].0, unit_square);
+        assert_eq!(result[1].1, RingType::Exterior);
+
+    }
+
+    #[test]
+    fn test_order_points() {
+        assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (1, 0) ), ( (1,0), (5, 0) ) );
+        assert_eq!(order_points( ((0,0), (10, 0)), (1, 0), (5, 0) ), ( (1,0), (5, 0) ) );
+        assert_eq!(order_points( ((10,0), (0, 0)), (1, 0), (5, 0) ), ( (5,0), (1, 0) ) );
+        assert_eq!(order_points( ((10,0), (0, 0)), (5, 0), (1, 0) ), ( (5,0), (1, 0) ) );
+
+        assert_eq!(order_points( ((0,0), (10, 0)), (0, 0), (10, 0) ), ( (0,0), (10, 0) ) );
+        assert_eq!(order_points( ((0,0), (10, 0)), (10, 0), (0, 0) ), ( (0,0), (10, 0) ) );
+
+        assert_eq!(order_points( ((0,0), (10, 0)), (0, 0), (5, 0) ), ( (0,0), (5, 0) ) );
+        assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (0, 0) ), ( (0,0), (5, 0) ) );
+
+        assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (10, 0) ), ( (5,0), (10, 0) ) );
+        assert_eq!(order_points( ((0,0), (10, 0)), (10, 0), (5, 0) ), ( (5,0), (10, 0) ) );
+    }
 
 }
 
