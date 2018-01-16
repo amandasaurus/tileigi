@@ -261,7 +261,12 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
             return Intersection::Overlapping((x1, y1), (x2, y2));
         }
 
-        if ((x2-x1)+(x4-x3) == (x4-x1)) && ((y2-y1)+(y4-y3) == (y4-y1)) {
+        // Surely there's a better, clearer way to do this?
+        if    ((x2-x1)+(x4-x3) == (x4-x1)) && ((y2-y1)+(y4-y3) == (y4-y1))   // 1-23-4
+           || ((x1-x2)+(x4-x3) == (x4-x2)) && ((y1-y2)+(y4-y3) == (y4-y2))  // 2-13-4
+           || ((x2-x1)+(x3-x4) == (x3-x1)) && ((y2-y1)+(y3-y4) == (y3-y1))   // 1-23-4
+           || ((x1-x2)+(x3-x4) == (x3-x2)) && ((y1-y2)+(y3-y4) == (y3-y2))  // 2-14-3
+            {
             // One after the other. We know they have the same slope, so this shortcut calculation
             // works.
             return Intersection::EndToEnd;
@@ -292,18 +297,18 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
         let p3_on_12 = in_bounds(x3, x1, x2) && in_bounds(y3, y1, y2) && slope_13.same_slope(&slope_12);
         let p4_on_12 = in_bounds(x4, x1, x2) && in_bounds(y4, y1, y2) && slope_14.same_slope(&slope_12);
 
-        //println!("line12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
-        //println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
-        //println!("delta_12 {:?}\ndelta_13 {:?} delta_14 {:?}\ndelta_23 {:?} delta_24 {:?}", delta_12, delta_13, delta_14, delta_23, delta_24);
-        //println!("p3_on_end {} p3_on_12 {}\np4_on_end {} p4_on_12 {}", p3_on_end, p3_on_12, p4_on_end, p4_on_12);
-        //println!("p1_on_34 {} p2_on_34 {}", p1_on_34, p2_on_34);
-        //println!("p3_on_12 {} p4_on_12 {}", p3_on_12, p4_on_12);
+        println!("line12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
+        println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
+        println!("p3_on_end {} p3_on_12 {}\np4_on_end {} p4_on_12 {}", p3_on_end, p3_on_12, p4_on_end, p4_on_12);
+        println!("p1_on_34 {} p2_on_34 {}", p1_on_34, p2_on_34);
+        println!("p3_on_12 {} p4_on_12 {}", p3_on_12, p4_on_12);
 
         if ((x1, y1) == (x3, y3) && (x2, y2) == (x4, y4)) || ((x1, y1) == (x4, y4) && (x2, y2) == (x3, y3)) {
             return Intersection::Overlapping((x1, y1), (x2, y2));
         } else {
             let first_point = if (x1,y1) == (x3, y3) || p1_on_34 { (x1, y1) } else if p3_on_12 { (x3,y3) } else { return Intersection::None; };
             let last_point = if (x2,y2) == (x4, y4) || p2_on_34 { (x2, y2) } else if p4_on_12 { (x4,y4) } else { return Intersection::None; };
+            debug_assert!(first_point != last_point);
             return Intersection::Overlapping(first_point, last_point);
         }
     }
@@ -448,8 +453,9 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
         let mut coords_to_insert = HashMap::new();
         // Keys are the point indexes.
         // Values are a Vec of new points to add after the point with that index.
-        // So vec![(0, 0), (1, 0)] for key #3, means to insert those 2 points (in that order) after
-        // ls.0[3]
+        // So vec![(0, 0), (1, 0)] for key #3, means to insert those 2 points after ls.0[3]
+        // They are initially stored in the order they appear in, but they need to be sorted
+        // afterwards
 
         for (i, points12) in ls.0.windows(2).enumerate() {
             let (p1, p2) = (points12[0], points12[1]);
@@ -457,7 +463,6 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
             for (j, points34) in ls.0[i+1..].windows(2).enumerate().take(ls.0.len()-i-1) {
                 let j = j + i + 1;
                 let (p3, p4) = (points34[0], points34[1]);
-                //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
                 let x1 = p1.x(); let y1 = p1.y();
                 let x2 = p2.x(); let y2 = p2.y();
                 let x3 = p3.x(); let y3 = p3.y();
@@ -467,40 +472,34 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     Intersection::None | Intersection::EndToEnd => {},
 
                     Intersection::Crossing((x0, y0)) => {
+                        println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
                         println!("i {} j {} crossing {:?},{:?}", i, j, x0, y0);
                         coords_to_insert.entry(i).or_insert(vec![]).push((x0, y0));
                         coords_to_insert.entry(j).or_insert(vec![]).push((x0, y0));
                     },
 
                     Intersection::Overlapping(overlap1, overlap2)  => {
+                        println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
                         println!("i {} j {} overlapping {:?},{:?}", i, j, overlap1, overlap2);
-                        let (overlap1, overlap2) = order_points( ((x1, y1), (x2, y2)), overlap1, overlap2);
+                        debug_assert!(overlap1 != overlap2);
 
-                        if overlap1 == (x1, y1) && overlap2 == (x2, y2) {
-                            // complete overlap, we don't have to do anything
-                            // and if we do, we'll get infinite loops
-                        } else {
-                            // we know p1 comes before p2 when going "along the line" now
-                            
-                            // Some of the end points will be the same as the overlap points, so don't
-                            // add them, otherwise that'll cause duplicate points
-                            if (x1, y1) != overlap1 {
-                                coords_to_insert.entry(i).or_insert(vec![]).push(overlap1);
-                            }
-                            if (x2, y2) != overlap2 {
-                                coords_to_insert.entry(i).or_insert(vec![]).push(overlap2);
-                            }
+                        if (x1, y1) != overlap1 && (x2, y2) != overlap1 {
+                            coords_to_insert.entry(i).or_insert(vec![]).push(overlap1);
+                        }
+                        if (x1, y1) != overlap2 && (x2, y2) != overlap2 {
+                            coords_to_insert.entry(i).or_insert(vec![]).push(overlap2);
+                        }
 
-                            if (x3, y3) != overlap1 {
-                                coords_to_insert.entry(j).or_insert(vec![]).push(overlap1);
-                            }
-                            if (x4, y4) != overlap2 {
-                                coords_to_insert.entry(j).or_insert(vec![]).push(overlap2);
-                            }
+                        if (x3, y3) != overlap1 && (x4, y4) != overlap1 {
+                            coords_to_insert.entry(j).or_insert(vec![]).push(overlap1);
+                        }
+                        if (x3, y3) != overlap2 && (x4, y4) != overlap2 {
+                            coords_to_insert.entry(j).or_insert(vec![]).push(overlap2);
                         }
                     },
 
                     Intersection::Touching((x0, y0)) => {
+                        println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
                         println!("i {} j {} touching {:?},{:?}", i, j, x0, y0);
                         // (x0, y0) is the point where they touch
                         if (x1,y1) == (x0,y0) || (x2,y2) == (x0,y0) {
@@ -525,12 +524,16 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
             let mut offset = 0;
 
             // Turn hashmap into a sorted vec, sorted by index to add
-            for v in coords_to_insert.values_mut() {
-                v.dedup();
-            }
-            let mut coords_to_insert = coords_to_insert.into_iter().collect::<Vec<_>>();
-            coords_to_insert.sort();
-            let coords_to_insert = coords_to_insert;
+            let coords_to_insert = ls.0.windows(2).enumerate().filter_map(|(idx, points)| {
+                let (point1, point2) = (points[0], points[1]);
+                if let Some(mut new_points) = coords_to_insert.remove(&idx) {
+                    new_points.sort_by(|&new_coord1, &new_coord2| order_points(((point1.x(), point1.y()), (point2.x(), point2.y())), new_coord1, new_coord2));
+                    new_points.dedup();
+                    Some((idx, new_points))
+                } else {
+                    None
+                }
+            }).collect::<Vec<_>>();
 
             println!("line {:?}", ls);
             println!("coords_to_insert {:?}", coords_to_insert);
@@ -809,10 +812,15 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
 }
 
 /// Given a line defined by 2 points, and 2 other points (p1 & p2) which were assume are on the
-/// line, return the 2 points, but ordered, so that going from the start of the line you hit p1 and
-/// then p2, and then the end of the line
-fn order_points<T: CoordinateType+Debug+Sub<Output=T>+Ord>(line: ((T, T), (T, T)), p1: (T, T), p2: (T, T)) -> ((T, T), (T, T)) {
-    assert!(p1 != p2);
+/// line, return where those 2 points are in order when going along the line, or not.
+/// Returns Ordering::Equal when the points are the same.
+/// Returns Ordering::Less when p1 comes before p2 when moving from the line's start to it's end,
+/// i.e. they are sorta in order already.
+/// Returns Ordering::Greater when p1 comes after p2 when moving from the line's start to it's end
+fn order_points<T: CoordinateType+Debug+Sub<Output=T>+Ord>(line: ((T, T), (T, T)), p1: (T, T), p2: (T, T)) -> Ordering {
+    if p1 == p2 {
+        return Ordering::Equal;
+    }
     assert!(line.0 != line.1);
 
     fn sub<T: CoordinateType+Ord+Sub<Output=T>>(a: (T, T), b: (T, T)) -> (T, T) {
@@ -856,9 +864,11 @@ fn order_points<T: CoordinateType+Debug+Sub<Output=T>+Ord>(line: ((T, T), (T, T)
     let slope_1_end = sub(line.1, p1);
 
     if add(slope_start_1, slope_1_2, slope_2_end) == slope_line {
-        (p1, p2)
+        Ordering::Less
+        // (p1, p2)
     } else if add(slope_start_2, slope_2_1, slope_1_end) == slope_line {
-        (p2, p1)
+        Ordering::Greater
+        // (p2, p1)
     } else {
         // this shouldn't happen
         // Probably happens when p1 and/or p2 aren't on the line
@@ -967,6 +977,15 @@ mod test {
     fn intersect7() {
         // bbox overlaps, but they don't have the same slope
         assert_eq!(intersection(0,0, 10,10,  1,2, 1,5), Intersection::None);
+    }
+
+    #[test]
+    fn intersect8() {
+        assert_eq!(intersection(1,2, 1,1,  1,3, 1,2), Intersection::EndToEnd);
+        assert_eq!(intersection(1,1, 1,2,  1,3, 1,2), Intersection::EndToEnd);
+
+        assert_eq!(intersection(1,2, 1,1,  1,2, 1,3), Intersection::EndToEnd);
+        assert_eq!(intersection(1,1, 1,2,  1,2, 1,3), Intersection::EndToEnd);
     }
 
     #[test]
@@ -1336,19 +1355,19 @@ mod test {
 
     #[test]
     fn test_order_points() {
-        assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (1, 0) ), ( (1,0), (5, 0) ) );
-        assert_eq!(order_points( ((0,0), (10, 0)), (1, 0), (5, 0) ), ( (1,0), (5, 0) ) );
-        assert_eq!(order_points( ((10,0), (0, 0)), (1, 0), (5, 0) ), ( (5,0), (1, 0) ) );
-        assert_eq!(order_points( ((10,0), (0, 0)), (5, 0), (1, 0) ), ( (5,0), (1, 0) ) );
+        assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (1, 0) ),  Ordering::Greater );
+        assert_eq!(order_points( ((0,0), (10, 0)), (1, 0), (5, 0) ),  Ordering::Less );
+        assert_eq!(order_points( ((10,0), (0, 0)), (1, 0), (5, 0) ),  Ordering::Greater );
+        assert_eq!(order_points( ((10,0), (0, 0)), (5, 0), (1, 0) ),  Ordering::Less );
 
-        assert_eq!(order_points( ((0,0), (10, 0)), (0, 0), (10, 0) ), ( (0,0), (10, 0) ) );
-        assert_eq!(order_points( ((0,0), (10, 0)), (10, 0), (0, 0) ), ( (0,0), (10, 0) ) );
+        assert_eq!(order_points( ((0,0), (10, 0)), (0, 0), (10, 0) ), Ordering::Less );
+        assert_eq!(order_points( ((0,0), (10, 0)), (10, 0), (0, 0) ), Ordering::Greater );
 
-        assert_eq!(order_points( ((0,0), (10, 0)), (0, 0), (5, 0) ), ( (0,0), (5, 0) ) );
-        assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (0, 0) ), ( (0,0), (5, 0) ) );
+        assert_eq!(order_points( ((0,0), (10, 0)), (0, 0), (5, 0) ), Ordering::Less  );
+        assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (0, 0) ), Ordering::Greater );
 
-        assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (10, 0) ), ( (5,0), (10, 0) ) );
-        assert_eq!(order_points( ((0,0), (10, 0)), (10, 0), (5, 0) ), ( (5,0), (10, 0) ) );
+        assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (10, 0) ), Ordering::Less );
+        assert_eq!(order_points( ((0,0), (10, 0)), (10, 0), (5, 0) ), Ordering::Greater );
     }
 
 }
