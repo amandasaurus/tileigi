@@ -237,8 +237,8 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
         return Intersection::None;
     }
     
-    //println!("\nline12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
-    //println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
+    println!("\nline12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
+    println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
 
     debug_assert!((x1, y1) != (x2, y2));
     debug_assert!((x3, y3) != (x4, y4));
@@ -261,12 +261,25 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
             return Intersection::Overlapping((x1, y1), (x2, y2));
         }
 
-        // Surely there's a better, clearer way to do this?
-        if    ((x2-x1)+(x4-x3) == (x4-x1)) && ((y2-y1)+(y4-y3) == (y4-y1))   // 1-23-4
-           || ((x1-x2)+(x4-x3) == (x4-x2)) && ((y1-y2)+(y4-y3) == (y4-y2))  // 2-13-4
-           || ((x2-x1)+(x3-x4) == (x3-x1)) && ((y2-y1)+(y3-y4) == (y3-y1))   // 1-23-4
-           || ((x1-x2)+(x3-x4) == (x3-x2)) && ((y1-y2)+(y3-y4) == (y3-y2))  // 2-14-3
+        fn delta<T: Ord+Sub<Output=T>>(a: T, b: T) -> T {
+            if a > b { a - b } else { b - a }
+        }
+
+        let delta_x = delta(x1, x2)+delta(x3, x4);
+        let delta_y = delta(y1, y2)+delta(y3, y4);
+        if    (delta_x == delta(x1, x4) && delta_y == delta(y1, y4)) // 1-23-4
+           || (delta_x == delta(x2, x4) && delta_y == delta(y2, y4)) // 2-13-4
+           || (delta_x == delta(x1, x3) && delta_y == delta(y1, y3)) // 1-24-3
+           || (delta_x == delta(x2, x3) && delta_y == delta(y2, y3)) // 2-13-4
             {
+                println!("{} here", line!());
+                println!("{} {}", line!(), ((x2-x1)+(x4-x3) == (x4-x1)) && ((y2-y1)+(y4-y3) == (y4-y1)));
+                println!("{} {}", line!(), ((x1-x2)+(x4-x3) == (x4-x2)) && ((y1-y2)+(y4-y3) == (y4-y2)));
+
+                // This is the problem line
+                println!("{} {}", line!(), ((x2-x1)+(x3-x4) == (x3-x1)) && ((y2-y1)+(y3-y4) == (y3-y1)));
+
+                println!("{} {}", line!(), ((x1-x2)+(x3-x4) == (x3-x2)) && ((y1-y2)+(y3-y4) == (y3-y2)));
             // One after the other. We know they have the same slope, so this shortcut calculation
             // works.
             return Intersection::EndToEnd;
@@ -308,7 +321,7 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
         } else {
             let first_point = if (x1,y1) == (x3, y3) || p1_on_34 { (x1, y1) } else if p3_on_12 { (x3,y3) } else { return Intersection::None; };
             let last_point = if (x2,y2) == (x4, y4) || p2_on_34 { (x2, y2) } else if p4_on_12 { (x4,y4) } else { return Intersection::None; };
-            debug_assert!(first_point != last_point);
+            debug_assert!(first_point != last_point, "{:?}", first_point);
             return Intersection::Overlapping(first_point, last_point);
         }
     }
@@ -446,10 +459,10 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
     if ls.0.len() <= 3 {
         return;
     }
-    println!("\n\nXXX\nls {:?}\n", ls);
+    //println!("\n\nXXX\nls {:?}\n", ls);
 
     loop {
-        println!("\nStart of loop\n{:?}", ls.0);
+        //println!("\nStart of loop\n{:?}", ls.0);
         let mut coords_to_insert = HashMap::new();
         // Keys are the point indexes.
         // Values are a Vec of new points to add after the point with that index.
@@ -472,15 +485,15 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     Intersection::None | Intersection::EndToEnd => {},
 
                     Intersection::Crossing((x0, y0)) => {
-                        println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
-                        println!("i {} j {} crossing {:?},{:?}", i, j, x0, y0);
+                        //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
+                        //println!("i {} j {} crossing {:?},{:?}", i, j, x0, y0);
                         coords_to_insert.entry(i).or_insert(vec![]).push((x0, y0));
                         coords_to_insert.entry(j).or_insert(vec![]).push((x0, y0));
                     },
 
                     Intersection::Overlapping(overlap1, overlap2)  => {
-                        println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
-                        println!("i {} j {} overlapping {:?},{:?}", i, j, overlap1, overlap2);
+                        //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
+                        //println!("i {} j {} overlapping {:?},{:?}", i, j, overlap1, overlap2);
                         debug_assert!(overlap1 != overlap2);
 
                         if (x1, y1) != overlap1 && (x2, y2) != overlap1 {
@@ -499,8 +512,8 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     },
 
                     Intersection::Touching((x0, y0)) => {
-                        println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
-                        println!("i {} j {} touching {:?},{:?}", i, j, x0, y0);
+                        //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
+                        //println!("i {} j {} touching {:?},{:?}", i, j, x0, y0);
                         // (x0, y0) is the point where they touch
                         if (x1,y1) == (x0,y0) || (x2,y2) == (x0,y0) {
                             // touching point is at end of line12, ergo it's in the middle of line34
@@ -535,12 +548,12 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                 }
             }).collect::<Vec<_>>();
 
-            println!("line {:?}", ls);
-            println!("coords_to_insert {:?}", coords_to_insert);
+            //println!("line {:?}", ls);
+            //println!("coords_to_insert {:?}", coords_to_insert);
 
             for (point_idx, new_points) in coords_to_insert.into_iter() {
                 for new_point in new_points.into_iter() {
-                    println!("Adding {:?} after index {}", new_point, point_idx+offset);
+                    //println!("Adding {:?} after index {}", new_point, point_idx+offset);
                     // +1 because we want the new point to be *after* the current point we're
                     // looking at
                     ls.0.insert(point_idx+offset+1, Point::new(new_point.0, new_point.1));
@@ -590,7 +603,7 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
 
     debug_assert!(loops.iter().all(|idxes| idxes.len() == 2));
 
-    println!("points {:?}", points);
+    //println!("points {:?}", points);
     //println!("outgoing_segments {:?}", outgoing_segments);
     // sort loops where the smaller length (in terms of number of points) are to the front.
     // Ideal: Sort them so that if a loop is a subset of a larger loop, then the smaller is ahead,
@@ -662,8 +675,13 @@ enum Crossing {
     /// There is a specific overlap
     Yes,
 
-    /// The point is on the line segment
-    Touches
+    /// The point is on the line segment, i.e it's a horizontal line and the ray passes
+    /// along/through it
+    Touches,
+
+    /// The ray goes through the start, or end, point of the line
+    StartPoint,
+    EndPoint,
 }
 
 /// An infinite line from point to the left (ie negative infitity in the x direction), does that
@@ -674,7 +692,7 @@ fn does_ray_cross<T: CoordinateType+Debug+Ord>(point: &Point<T>, p1: &Point<T>, 
     let (x1, y1) = (p1.x(), p1.y());
     let (x2, y2) = (p2.x(), p2.y());
 
-    println!("x {:?} y {:?} x1 {:?} y1 {:?} x2 {:?} y2 {:?}", x, y, x1, y1, x2, y2);
+    //println!("x {:?} y {:?} x1 {:?} y1 {:?} x2 {:?} y2 {:?}", x, y, x1, y1, x2, y2);
     if (x == x1 && y == y1) || (x == x2 && y == y2) {
         return Crossing::Touches;
     }
@@ -691,9 +709,19 @@ fn does_ray_cross<T: CoordinateType+Debug+Ord>(point: &Point<T>, p1: &Point<T>, 
     } else if (y1 > y && y2 < y) || (y1 < y && y2 > y) {
         // proper crossing
         return Crossing::Yes;
-    } else if y1 == y && y2 == y && x1 < x && x2 < x {
-        // This line lies on the ray
-        return Crossing::Touches;
+    } else if x1 < x && x2 < x {
+        // This linesegment is to the left of the poing
+
+        if y1 != y2 && y1 == y {
+            return Crossing::StartPoint;
+        } else if y1 != y2 && y2 == y {
+            return Crossing::EndPoint;
+        } else if (y1 == y && y2 != y) || (y1 != y && y2 == y) {
+            return Crossing::Yes;
+        } else if y1 == y && y2 == y {
+            // This line lies on the ray
+            return Crossing::Touches;
+        }
     }
 
     unreachable!();
@@ -714,6 +742,7 @@ fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index
     // no "partially overlapping" rings.
     let point = ring.0[0];
     let mut num_crossings = 0;
+    //println!("{} is_ring_ext_int\nring {:?}\nring_index {}\nall_rings{:?}", line!(), ring, ring_index, all_rings);
 
     'start_point: for point in ring.0.iter() {
         num_crossings = 0;
@@ -722,15 +751,24 @@ fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index
         // loop over all the rings
         for (i, ring) in all_rings.iter().enumerate() {
             if i == ring_index { continue; }
+            println!("i {} point {:?}", i, point);
 
             // then all the segments in this ring
             for other_points in ring.0.windows(2) {
                 debug_assert!(other_points.len() == 2);
 
+                println!("other_points {:?}, does_ray_cross {:?}", other_points, does_ray_cross(&point, &other_points[0], &other_points[1]));
                 match does_ray_cross(&point, &other_points[0], &other_points[1]) {
+                    // Choose that when it goes through the start, it's a cross. Otherwise we could
+                    // double count the crossings when the point is at the same y value as a point
+                    // on this ring.
+                    Crossing::StartPoint => { num_crossings += 1 },
+                    Crossing::EndPoint => {},
+
                     Crossing::Yes => { num_crossings += 1 },
                     Crossing::No => {},
                     Crossing::Touches => {
+                        println!("Touches, so try again");
                         // Go back and choose a new start point
                         continue 'start_point;
                     }
@@ -767,7 +805,10 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
         return MultiPolygon(vec![Polygon::new(rings.remove(0), vec![])]);
     }
 
+
     let rings_with_type = calc_rings_ext_int(rings);
+
+    println!("{} rings_with_type {:?}", line!(), rings_with_type);
 
     // Do a simple case when there are only 2 rings?
     let mut exteriors = Vec::new();
@@ -1316,6 +1357,18 @@ mod test {
     }
 
     #[test]
+    fn does_ray_cross2() {
+        assert_eq!(does_ray_cross(&(1,2).into(), &(0, 0).into(), &(0, 2).into()), Crossing::EndPoint);
+        assert_eq!(does_ray_cross(&(1,2).into(), &(0, 2).into(), &(0, 0).into()), Crossing::StartPoint);
+    }
+
+    #[test]
+    fn does_ray_cross3() {
+        assert_eq!(does_ray_cross(&(1,2).into(), &(0, 0).into(), &(0, 2).into()), Crossing::EndPoint);
+        assert_eq!(does_ray_cross(&(1,2).into(), &(0, 2).into(), &(0, 4).into()), Crossing::StartPoint);
+    }
+
+    #[test]
     fn calc_rings_ext_int1() {
         // a-----b
         // | g-h |
@@ -1352,9 +1405,21 @@ mod test {
         assert_eq!(result[1].1, RingType::Exterior);
 
     }
+    #[test]
+    fn calc_rings_ext_int2() {
+        let ring1: LineString<_> = vec![(1, 2), (1, 1), (2, 1), (2, 3), (1, 3), (1, 2)].into();
+        let ring2: LineString<_> = vec![(0, 0), (0, 2), (0, 4), (3, 4), (3, 0), (0, 0)].into();
+
+        let result = calc_rings_ext_int(vec![ring1.clone(), ring2.clone()]);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].0, ring1);
+        assert_eq!(result[0].1, RingType::Interior);
+        assert_eq!(result[1].0, ring2);
+        assert_eq!(result[1].1, RingType::Exterior);
+    }
 
     #[test]
-    fn test_order_points() {
+    fn order_points1() {
         assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (1, 0) ),  Ordering::Greater );
         assert_eq!(order_points( ((0,0), (10, 0)), (1, 0), (5, 0) ),  Ordering::Less );
         assert_eq!(order_points( ((10,0), (0, 0)), (1, 0), (5, 0) ),  Ordering::Greater );
