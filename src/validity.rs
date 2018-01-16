@@ -237,8 +237,8 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
         return Intersection::None;
     }
     
-    println!("\nline12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
-    println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
+    //println!("\nline12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
+    //println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
 
     debug_assert!((x1, y1) != (x2, y2));
     debug_assert!((x3, y3) != (x4, y4));
@@ -272,14 +272,6 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
            || (delta_x == delta(x1, x3) && delta_y == delta(y1, y3)) // 1-24-3
            || (delta_x == delta(x2, x3) && delta_y == delta(y2, y3)) // 2-13-4
             {
-                println!("{} here", line!());
-                println!("{} {}", line!(), ((x2-x1)+(x4-x3) == (x4-x1)) && ((y2-y1)+(y4-y3) == (y4-y1)));
-                println!("{} {}", line!(), ((x1-x2)+(x4-x3) == (x4-x2)) && ((y1-y2)+(y4-y3) == (y4-y2)));
-
-                // This is the problem line
-                println!("{} {}", line!(), ((x2-x1)+(x3-x4) == (x3-x1)) && ((y2-y1)+(y3-y4) == (y3-y1)));
-
-                println!("{} {}", line!(), ((x1-x2)+(x3-x4) == (x3-x2)) && ((y1-y2)+(y3-y4) == (y3-y2)));
             // One after the other. We know they have the same slope, so this shortcut calculation
             // works.
             return Intersection::EndToEnd;
@@ -310,11 +302,11 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
         let p3_on_12 = in_bounds(x3, x1, x2) && in_bounds(y3, y1, y2) && slope_13.same_slope(&slope_12);
         let p4_on_12 = in_bounds(x4, x1, x2) && in_bounds(y4, y1, y2) && slope_14.same_slope(&slope_12);
 
-        println!("line12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
-        println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
-        println!("p3_on_end {} p3_on_12 {}\np4_on_end {} p4_on_12 {}", p3_on_end, p3_on_12, p4_on_end, p4_on_12);
-        println!("p1_on_34 {} p2_on_34 {}", p1_on_34, p2_on_34);
-        println!("p3_on_12 {} p4_on_12 {}", p3_on_12, p4_on_12);
+        //println!("line12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
+        //println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
+        //println!("p3_on_end {} p3_on_12 {}\np4_on_end {} p4_on_12 {}", p3_on_end, p3_on_12, p4_on_end, p4_on_12);
+        //println!("p1_on_34 {} p2_on_34 {}", p1_on_34, p2_on_34);
+        //println!("p3_on_12 {} p4_on_12 {}", p3_on_12, p4_on_12);
 
         if ((x1, y1) == (x3, y3) && (x2, y2) == (x4, y4)) || ((x1, y1) == (x4, y4) && (x2, y2) == (x3, y3)) {
             return Intersection::Overlapping((x1, y1), (x2, y2));
@@ -393,8 +385,8 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
     }
 
     // Should have been caught above.
-    println!("points {:?} {:?} {:?} {:?}", (x1, y1), (x2, y2), (x3, y3), (x4, y4));
-    println!("det {:?} sd {:?} td {:?}", determinate, sd, td);
+    eprintln!("points {:?} {:?} {:?} {:?}", (x1, y1), (x2, y2), (x3, y3), (x4, y4));
+    eprintln!("det {:?} sd {:?} td {:?}", determinate, sd, td);
     unreachable!();
 }
 
@@ -592,8 +584,8 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
             // start & end
             return vec![LineString(points)];
         } else {
-            println!("points {:?}", points);
-            println!("loops {:?}", loops);
+            eprintln!("points {:?}", points);
+            eprintln!("loops {:?}", loops);
             unreachable!();
         }
     }
@@ -751,13 +743,13 @@ fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index
         // loop over all the rings
         for (i, ring) in all_rings.iter().enumerate() {
             if i == ring_index { continue; }
-            println!("i {} point {:?}", i, point);
+            //println!("i {} point {:?}", i, point);
 
             // then all the segments in this ring
             for other_points in ring.0.windows(2) {
                 debug_assert!(other_points.len() == 2);
 
-                println!("other_points {:?}, does_ray_cross {:?}", other_points, does_ray_cross(&point, &other_points[0], &other_points[1]));
+                //println!("other_points {:?}, does_ray_cross {:?}", other_points, does_ray_cross(&point, &other_points[0], &other_points[1]));
                 match does_ray_cross(&point, &other_points[0], &other_points[1]) {
                     // Choose that when it goes through the start, it's a cross. Otherwise we could
                     // double count the crossings when the point is at the same y value as a point
@@ -768,7 +760,7 @@ fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index
                     Crossing::Yes => { num_crossings += 1 },
                     Crossing::No => {},
                     Crossing::Touches => {
-                        println!("Touches, so try again");
+                        //println!("Touches, so try again");
                         // Go back and choose a new start point
                         continue 'start_point;
                     }
@@ -808,7 +800,7 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
 
     let rings_with_type = calc_rings_ext_int(rings);
 
-    println!("{} rings_with_type {:?}", line!(), rings_with_type);
+    //println!("{} rings_with_type {:?}", line!(), rings_with_type);
 
     // Do a simple case when there are only 2 rings?
     let mut exteriors = Vec::new();
@@ -1053,7 +1045,7 @@ mod test {
     }
     
     #[test]
-    fn test_make_valid1() {
+    fn make_valid1() {
         let unit_square = vec![(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)];
         let geom: Polygon<i32> = Polygon::new(unit_square.clone().into(), vec![]);
         
@@ -1065,19 +1057,30 @@ mod test {
     }
 
     #[test]
-    fn test_make_valid2() {
-        let geom: Polygon<i32> = Polygon::new(vec![(0, 0), (0, 2), (1, 2), (1, 1), (2, 1), (2, 3), (1, 3), (1, 2), (0, 2), (0, 4), (3, 4), (3, 0), (0, 0)].into(), vec![]);
+    fn make_valid2() {
+        // a-----b
+        // | g-h |
+        // e-f | |
+        // | j-i |
+        // d-----c
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+        let e = Point::new(0, 2); let f = Point::new(2, 2);
+        let g = Point::new(2, 1); let h = Point::new(4, 1);
+        let i = Point::new(4, 3); let j = Point::new(2, 3);
+
+        let geom = Polygon::new(vec![a, b, c, d, e, f, j, i, h, g, f, e, a].into(), vec![]);
         assert!(!is_polygon_valid(&geom));
         
         let mut new_geom = make_polygon_valid(geom);
         assert_eq!(new_geom.0.len(), 1);
         let new_geom: Polygon<_> = new_geom.0.remove(0);
         assert!(is_polygon_valid(&new_geom));
-        assert_eq!(new_geom, Polygon::new(vec![(0, 0), (0, 4), (3, 4), (3, 0), (0, 0)].into(), vec![vec![(1, 1), (2, 1), (2, 3), (1, 3), (1, 1)].into()]));
+        assert_eq!(new_geom, Polygon::new(vec![a, e, d, c, b, a].into(), vec![vec![f, g, h, i, j, f].into()]));
     }
 
     #[test]
-    fn test_make_valid3() {
+    fn make_valid3() {
         // a-----b
         // | g-h |
         // | | | |
@@ -1101,7 +1104,7 @@ mod test {
     }
 
     #[test]
-    fn test_make_valid4() {
+    fn make_valid4() {
         // a-----b
         // | g-h |
         // | | | |
@@ -1126,7 +1129,7 @@ mod test {
             _ => unreachable!(),
         };
 
-        println!("{:?}", new_mp);
+        //println!("{:?}", new_mp);
         assert_eq!(new_mp.0.len(), 1);
         let poly = new_mp.0.remove(0);
         assert_eq!(poly.exterior, vec![a, d, c, b, a].into());
@@ -1136,7 +1139,7 @@ mod test {
     }
 
     #[test]
-    fn test_make_valid5() {
+    fn make_valid5() {
         // This polygon touches at a point (d). it should be 2 polygons
         //   a-b
         //   | |
@@ -1156,9 +1159,9 @@ mod test {
         let new_mp: MultiPolygon<_> = make_polygon_valid(poly);
 
         assert_eq!(new_mp.0.len(), 2);
-        assert_eq!(new_mp.0[0], Polygon::new(vec![a, d, c, b, a].into(), vec![]));
+        assert_eq!(new_mp.0[0], Polygon::new(vec![d, g, f, e, d].into(), vec![]));
         assert!(is_polygon_valid(&new_mp.0[0]));
-        assert_eq!(new_mp.0[1], Polygon::new(vec![d, e, f, e, d].into(), vec![]));
+        assert_eq!(new_mp.0[1], Polygon::new(vec![a, d, c, b, a].into(), vec![]));
         assert!(is_polygon_valid(&new_mp.0[1]));
 
     }
