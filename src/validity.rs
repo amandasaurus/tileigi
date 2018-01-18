@@ -8,6 +8,8 @@ use num_traits::Signed;
 use std::fmt::Debug;
 use std::hash::Hash;
 
+use ::simplify;
+
 use fraction::Fraction;
 
 pub fn is_valid<T: CoordinateType+Signed+Debug+Ord>(geom: &Geometry<T>) -> bool {
