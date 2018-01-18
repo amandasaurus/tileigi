@@ -547,6 +547,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 },
                 Some(g) => g,
             };
+
+            let geom = validity::make_valid(geom);
             debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:?}", line!(), geom);
             //println!("\nL {} geom {:?}", line!(), geom);
             if bad_obj {
