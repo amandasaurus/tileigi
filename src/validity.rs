@@ -240,8 +240,8 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
     //println!("\nline12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
     //println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
 
-    debug_assert!((x1, y1) != (x2, y2));
-    debug_assert!((x3, y3) != (x4, y4));
+    assert!((x1, y1) != (x2, y2), "(x1, y2) == (x2, y2) == {:?}", (x1, y1));
+    assert!((x3, y3) != (x4, y4), "(x3, y3) == (x4, y4) == {:?}", (x3, y3));
 
     let a = x2 - x1;
     let b = x3 - x4;
@@ -390,7 +390,8 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
     unreachable!();
 }
 
-pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(geom: Geometry<T>) -> Geometry<T> {
+pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut geom: Geometry<T>) -> Geometry<T> {
+    simplify::remove_unneeded_points(&mut geom);
     match geom {
         Geometry::Polygon(p) => Geometry::MultiPolygon(make_polygon_valid(p)),
         Geometry::MultiPolygon(mp) => Geometry::MultiPolygon(make_multipolygon_valid(mp)),
@@ -472,15 +473,24 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                 let x2 = p2.x(); let y2 = p2.y();
                 let x3 = p3.x(); let y3 = p3.y();
                 let x4 = p4.x(); let y4 = p4.y();
+                //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
 
                 match intersection(x1, y1, x2, y2, x3, y3, x4, y4) {
                     Intersection::None | Intersection::EndToEnd => {},
 
-                    Intersection::Crossing((x0, y0)) => {
+                    Intersection::Crossing(crosspoint) => {
                         //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
-                        //println!("i {} j {} crossing {:?},{:?}", i, j, x0, y0);
-                        coords_to_insert.entry(i).or_insert(vec![]).push((x0, y0));
-                        coords_to_insert.entry(j).or_insert(vec![]).push((x0, y0));
+                        //println!("i {} j {} crossing {:?}", i, j, crosspoint);
+                        // A "unit square" can cause a crossing. ie. (0,0)-(1,1) and (1,0)-(0,1)
+                        // (diagonal). That's returned as Crossing((1, 1)).
+                        // So don't add a point if it would cause a duplicate
+                        // We basically never want 2 identical points, one after the other
+                        if (x1, y1) != crosspoint && (x2, y2) != crosspoint {
+                            coords_to_insert.entry(i).or_insert(vec![]).push(crosspoint);
+                        }
+                        if (x3, y3) != crosspoint && (x4, y4) != crosspoint {
+                            coords_to_insert.entry(j).or_insert(vec![]).push(crosspoint);
+                        }
                     },
 
                     Intersection::Overlapping(overlap1, overlap2)  => {
@@ -667,11 +677,14 @@ enum Crossing {
     /// There is a specific overlap
     Yes,
 
-    /// The point is on the line segment, i.e it's a horizontal line and the ray passes
-    /// along/through it
+    /// The ray passes though the point entirely
+    /// (i) The start or end point is the point
+    /// (ii) it's a horizontal line and the ray passes along/through it
+    /// (iii) The point is part of the line
     Touches,
 
-    /// The ray goes through the start, or end, point of the line
+    /// The ray goes through the start, or end, point of the line, but the point is not the
+    /// start/end
     StartPoint,
     EndPoint,
 }
@@ -684,39 +697,28 @@ fn does_ray_cross<T: CoordinateType+Debug+Ord>(point: &Point<T>, p1: &Point<T>, 
     let (x1, y1) = (p1.x(), p1.y());
     let (x2, y2) = (p2.x(), p2.y());
 
-    //println!("x {:?} y {:?} x1 {:?} y1 {:?} x2 {:?} y2 {:?}", x, y, x1, y1, x2, y2);
-    if (x == x1 && y == y1) || (x == x2 && y == y2) {
+    if ( y1 > y && y2 > y ) || ( y1 < y && y2 < y ) || (x1 > x && x2 > x ){
+        // segment is entirely above, below, or to the right of, the point.
+        return Crossing::No;
+    } else if (x == x1 && y == y1)  // point is start point
+       || (x == x2 && y == y2) // point is end point
+       || ( (x2-x1)*(y - y1) == (x-x1)*(y2-y1) )  // point is on the line of a-b
+       || ( y1 == y2 && y1 == y && ( x1 <= x || x2 <= x2 )  )  // the ray goes through all, or part of, the line segment
+    {
         return Crossing::Touches;
-    }
-
-    if y1 > y && y2 > y {
-        // Line segment is above the point
-        return Crossing::No;
-    } else if y1 < y && y2 < y {
-        // Line segment is below the point
-        return Crossing::No;
-    } else if x1 > x && x2 > x {
-        // Line segment is to the right of the point
-        return Crossing::No;
-    } else if (y1 > y && y2 < y) || (y1 < y && y2 > y) {
-        // proper crossing
+    } else if x1 < x && y1 == y {
+        return Crossing::StartPoint;
+    } else if x2 < x && y2 == y {
+        return Crossing::EndPoint;
+    } else if (x1 < x || x2 < x) && ( (y1>y && y2<y) || (y1<y && y2>y) ) {
         return Crossing::Yes;
-    } else if x1 < x && x2 < x {
-        // This linesegment is to the left of the poing
-
-        if y1 != y2 && y1 == y {
-            return Crossing::StartPoint;
-        } else if y1 != y2 && y2 == y {
-            return Crossing::EndPoint;
-        } else if (y1 == y && y2 != y) || (y1 != y && y2 == y) {
-            return Crossing::Yes;
-        } else if y1 == y && y2 == y {
-            // This line lies on the ray
-            return Crossing::Touches;
-        }
+    } else {
+        // I don't like this and would like to have all "No" cases explicity covered
+        return Crossing::No;
     }
 
-    unreachable!();
+    //eprintln!("x {:?} y {:?} x1 {:?} y1 {:?} x2 {:?} y2 {:?}", x, y, x1, y1, x2, y2);
+    //unreachable!();
 }
 
 
@@ -836,7 +838,9 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
         } else {
             // we need to figure out which exterior each interior is in.
             eprintln!("polygons {:?}", polygons);
-            unimplemented!()
+            eprintln!("interiors {:?}", interiors);
+            //unimplemented!()
+            // Just skip it for now
         }
     }
 
@@ -881,13 +885,13 @@ fn order_points<T: CoordinateType+Debug+Sub<Output=T>+Ord>(line: ((T, T), (T, T)
     let slope_line = sub(line.1, line.0);
 
     // slope from the start point to p1
-    let slope_start_1 = sub(p1, line.0);//(p1.0 - (line.0).0, p1.1 - (line.0).1);
+    let slope_start_1 = sub(p1, line.0);
 
     // slope from the start point to p2
-    let slope_start_2 = sub(p2, line.0);//(p2.0 - (line.0).0, p2.1 - (line.0).1);
+    let slope_start_2 = sub(p2, line.0);
     
     // slope from p1 to p2
-    let slope_1_2 = sub(p2, p1);//(p2.0 - p1.0, p2.1 - p1.1);
+    let slope_1_2 = sub(p2, p1);
 
     // slope from p2 to p1
     let slope_2_1 = sub(p1, p2);
@@ -1369,6 +1373,38 @@ mod test {
     fn does_ray_cross3() {
         assert_eq!(does_ray_cross(&(1,2).into(), &(0, 0).into(), &(0, 2).into()), Crossing::EndPoint);
         assert_eq!(does_ray_cross(&(1,2).into(), &(0, 2).into(), &(0, 4).into()), Crossing::StartPoint);
+    }
+
+    #[test]
+    fn does_ray_cross4() {
+        assert_eq!(does_ray_cross(&(50, 3).into(), &(50, 2).into(), &(49, 3).into()), Crossing::EndPoint);
+        assert_eq!(does_ray_cross(&(50, 3).into(), &(49, 3).into(), &(50, 2).into()), Crossing::StartPoint);
+    }
+
+    #[test]
+    fn does_ray_cross5() {
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(1, 0).into(), &(0, 1).into()), Crossing::No);
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(0, 1).into(), &(1, 0).into()), Crossing::No);
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(-1, 0).into(), &(0, -1).into()), Crossing::StartPoint);
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(0, -1).into(), &(-1, 0).into()), Crossing::EndPoint);
+
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(0, -1).into(), &(1, 0).into()), Crossing::No);
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(1, 0).into(), &(0, -1).into()), Crossing::No);
+    }
+
+    #[test]
+    fn does_ray_cross6() {
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(-5, 5).into(), &(0, 5).into()), Crossing::No);
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(-5, 5).into(), &(3, 1).into()), Crossing::No);
+    }
+
+    #[test]
+    fn does_ray_cross7() {
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(0, 0).into(), &(0, 5).into()), Crossing::Touches);
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(0, 5).into(), &(0, 0).into()), Crossing::Touches);
+
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(0, 5).into(), &(0, -5).into()), Crossing::Touches);
+        assert_eq!(does_ray_cross(&(0, 0).into(), &(-1, 1).into(), &(1, -1).into()), Crossing::Touches);
     }
 
     #[test]
