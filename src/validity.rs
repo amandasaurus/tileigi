@@ -262,62 +262,105 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
         if ((x1, y1) == (x3, y3) && (x2, y2) == (x4, y4)) || ((x1, y1) == (x4, y4) && (x2, y2) == (x3, y3)) {
             return Intersection::Overlapping((x1, y1), (x2, y2));
         }
+        
+        /// True iff point p is collinear with the line ab (NB: true if it goes beyond the ends)
+        fn collinear<T: CoordinateType>(a: (T, T), b: (T, T), p: (T, T)) -> bool {
+            // (x2 - x1)(y - y1) == (y2 - y1)(x - x1)
+            (b.0 - a.0)*(p.1 - a.1) == (b.1 - a.1)*(p.0 - a.0)
+        }
+
+        fn in_bounds<U: Ord+Copy>(z: U, a: U, b: U) -> bool {
+            z >= min(a,b) && z <= max(a,b)
+        }
+
+        let p1_collinear_34 = collinear((x3, y3), (x4, y4), (x1, y1));
+        let p2_collinear_34 = collinear((x3, y3), (x4, y4), (x2, y2));
+
+        /// True iff p lies on the line segment ab, i.e. between the two, and is not a and not b
+        /// (i.e. is on the line, but is not at the end points)
+        /// Assumes that p is already collinear with ab
+        fn point_on_line<T: CoordinateType+Ord+Copy>(a: (T, T), b: (T, T), p: (T, T)) -> bool {
+            debug_assert!(collinear(a, b, p));
+            (p != a) && (p != b) && in_bounds(p.0, a.0, b.0) && in_bounds(p.1, a.1, b.1)
+        }
+
+        /// True iff p lies on the line segment ab, i.e. between the two, incl a and not b
+        /// Assumes that p is already collinear with ab
+        fn point_on_line_incl_end<T: CoordinateType+Ord+Copy>(a: (T, T), b: (T, T), p: (T, T)) -> bool {
+            debug_assert!(collinear(a, b, p));
+            in_bounds(p.0, a.0, b.0) && in_bounds(p.1, a.1, b.1)
+        }
 
         fn delta<T: Ord+Sub<Output=T>>(a: T, b: T) -> T {
             if a > b { a - b } else { b - a }
         }
 
-        let delta_x = delta(x1, x2)+delta(x3, x4);
-        let delta_y = delta(y1, y2)+delta(y3, y4);
-        if    (delta_x == delta(x1, x4) && delta_y == delta(y1, y4)) // 1-23-4
-           || (delta_x == delta(x2, x4) && delta_y == delta(y2, y4)) // 2-13-4
-           || (delta_x == delta(x1, x3) && delta_y == delta(y1, y3)) // 1-24-3
-           || (delta_x == delta(x2, x3) && delta_y == delta(y2, y3)) // 2-13-4
-            {
-            // One after the other. We know they have the same slope, so this shortcut calculation
-            // works.
-            return Intersection::EndToEnd;
+        match (p1_collinear_34, p2_collinear_34) {
+            (false, false) => {
+                // neither points are collinear, so no match
+                return Intersection::None;
+            },
+
+            (true, false) | (false, true) => {
+                // One point is on the line and the other is? But the slopes are the same, so this
+                // should be impossible
+                unreachable!();
+            },
+
+            (true, true) => {
+                // These lines totally overlap
+                let delta_x = delta(x1, x2)+delta(x3, x4);
+                let delta_y = delta(y1, y2)+delta(y3, y4);
+                if    (delta_x == delta(x1, x4) && delta_y == delta(y1, y4)) // 1-23-4
+                   || (delta_x == delta(x2, x4) && delta_y == delta(y2, y4)) // 2-13-4
+                   || (delta_x == delta(x1, x3) && delta_y == delta(y1, y3)) // 1-24-3
+                   || (delta_x == delta(x2, x3) && delta_y == delta(y2, y3)) // 2-13-4
+                    {
+                    // One after the other. We know they have the same slope, so this shortcut
+                    // calculation works.
+                    return Intersection::EndToEnd;
+                }
+                let p3_on_12 = point_on_line((x1, y1), (x2, y2), (x3, y3));
+                let p4_on_12 = point_on_line((x1, y1), (x2, y2), (x4, y4));
+                match (p3_on_12, p4_on_12) {
+                    (true, true) => {
+                        // both on the line
+                        return Intersection::Overlapping((x3, y3), (x4, y4));
+                    },
+                    (true, false) => {
+                        // p3 is on the line 12, but which of p1 & p2 is the other point
+                        // either p1 or p2 is on the line 34
+                        debug_assert!(point_on_line_incl_end((x3, y3), (x4, y4), (x1, y1)) || point_on_line_incl_end((x3, y3), (x4, y4), (x2, y2)));
+                        let other_point = if point_on_line_incl_end((x3, y3), (x4, y4), (x1, y1)) {
+                            (x1, y1)
+                        } else {
+                            debug_assert!(point_on_line_incl_end((x3, y3), (x4, y4), (x2, y2)));
+                            (x2, y2)
+                        };
+                        return Intersection::Overlapping((x3, y3), other_point);
+                    },
+                    (false, true) => {
+                        // p4 is on the line 12, but which of p1 & p2 is the other point
+                        // either p1 or p2 is on the line 34
+                        debug_assert!(point_on_line_incl_end((x3, y3), (x4, y4), (x1, y1)) || point_on_line_incl_end((x3, y3), (x4, y4), (x2, y2)));
+                        let other_point = if point_on_line_incl_end((x3, y3), (x4, y4), (x1, y1)) {
+                            (x1, y1)
+                        } else {
+                            debug_assert!(point_on_line_incl_end((x3, y3), (x4, y4), (x2, y2)));
+                            (x2, y2)
+                        };
+                        return Intersection::Overlapping((x4, y4), other_point);
+                    },
+                    (false, false) => {
+                        // This can happen when 12 is a subset of 34
+                        debug_assert!(point_on_line((x3, y3), (x4, y4), (x1, y1)) && point_on_line((x3, y3), (x4, y4), (x2, y2)));
+                        return Intersection::Overlapping((x1, y1), (x2, y2));
+                    }
+                }
+            },
+
         }
 
-        let slope_12 = Fraction::new(a, c);
-        let slope_13 = Fraction::new(x3-x1, y3-y1);
-
-        if !slope_12.same_slope(&slope_13) {
-            return Intersection::None;
-        }
-
-        let slope_34 = Fraction::new(b, d);
-
-        let slope_23 = Fraction::new(x3-x1, y3-y1);
-        let slope_14 = Fraction::new(x4-x1, y4-y1);
-        let slope_24 = Fraction::new(x4-x2, y4-y2);
-
-        // TODO Maybe remove Copy & use reference &U? Would that mean less memory copies?
-        fn in_bounds<U: Ord+Copy>(z: U, a: U, b: U) -> bool {
-            z >= min(a,b) && z <= max(a,b)
-        }
-
-        let p3_on_end = (x1, y1) == (x3, y3) || (x2, y2) == (x3, y3);
-        let p4_on_end = (x1, y1) == (x4, y4) || (x2, y2) == (x4, y4);
-        let p1_on_34 = in_bounds(x1, x3, x4) && in_bounds(y1, y3, y4) && slope_13.same_slope(&slope_34);
-        let p2_on_34 = in_bounds(x2, x3, x4) && in_bounds(y2, y3, y4) && slope_23.same_slope(&slope_34);
-        let p3_on_12 = in_bounds(x3, x1, x2) && in_bounds(y3, y1, y2) && slope_13.same_slope(&slope_12);
-        let p4_on_12 = in_bounds(x4, x1, x2) && in_bounds(y4, y1, y2) && slope_14.same_slope(&slope_12);
-
-        //println!("line12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
-        //println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
-        //println!("p3_on_end {} p3_on_12 {}\np4_on_end {} p4_on_12 {}", p3_on_end, p3_on_12, p4_on_end, p4_on_12);
-        //println!("p1_on_34 {} p2_on_34 {}", p1_on_34, p2_on_34);
-        //println!("p3_on_12 {} p4_on_12 {}", p3_on_12, p4_on_12);
-
-        if ((x1, y1) == (x3, y3) && (x2, y2) == (x4, y4)) || ((x1, y1) == (x4, y4) && (x2, y2) == (x3, y3)) {
-            return Intersection::Overlapping((x1, y1), (x2, y2));
-        } else {
-            let first_point = if (x1,y1) == (x3, y3) || p1_on_34 { (x1, y1) } else if p3_on_12 { (x3,y3) } else { return Intersection::None; };
-            let last_point = if (x2,y2) == (x4, y4) || p2_on_34 { (x2, y2) } else if p4_on_12 { (x4,y4) } else { return Intersection::None; };
-            debug_assert!(first_point != last_point, "{:?}", first_point);
-            return Intersection::Overlapping(first_point, last_point);
-        }
     }
 
     let e = x3 - x1;
@@ -580,6 +623,10 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
         return vec![];
     }
 
+    // Key: a point (x,y) values are a vec of usizes representing the index (in the linestring)
+    // where this point is the first point of that segment. e.g. (0, 0): [1, 5], means that the
+    // line segment [1, 2] starts at point (0,0), i.e. points[1] == (0,0), likewise for segment [5,
+    // 6]
     let mut outgoing_segments = HashMap::with_capacity(points.len());
 
     for (i, p) in points.iter().enumerate() {
@@ -589,6 +636,8 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
     }
 
     //println!("outgoing_segments {:?}", outgoing_segments);
+    // loops: a Vec of Vec's. Each inner vec is 2 point indexes, and means 'there is a loop from
+    // this point to that point'
     let mut loops = outgoing_segments.iter().filter(|&(_, v)| v.len() > 1).map(|(_, v)| v).collect::<Vec<_>>();
 
     if loops.len() == 1 {
@@ -605,7 +654,11 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
     let mut point_unassigned = vec![true; points.len()];
     let mut results: Vec<LineString<T>> = vec![];
 
-    debug_assert!(loops.iter().all(|idxes| idxes.len() == 2));
+    if loops.iter().any(|idxes| idxes.len() == 2) {
+        // FIXME do something here
+        return vec![];
+    }
+    debug_assert!(loops.iter().all(|idxes| idxes.len() == 2), "There is a point with != 2 segments: {:?}\npoints: {:?}", loops, points);
 
     //println!("points {:?}", points);
     //println!("outgoing_segments {:?}", outgoing_segments);
@@ -839,10 +892,12 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
             // nothing to do
         } else {
             // we need to figure out which exterior each interior is in.
-            eprintln!("polygons {:?}", polygons);
-            eprintln!("interiors {:?}", interiors);
+            //eprintln!("polygons {:?}", polygons);
+            //eprintln!("interiors {:?}", interiors);
             //unimplemented!()
+
             // Just skip it for now
+            // FIXME implement this
         }
     }
 
@@ -935,7 +990,7 @@ mod test {
         assert_eq!(intersection(0, 0,  0, 10,  0, 0,  0, 10), Intersection::Overlapping((0, 0), (0, 10)));
         assert_eq!(intersection(0, 0,  0, 10,  0, 5,  0, 10), Intersection::Overlapping((0, 5), (0, 10)));
         assert_eq!(intersection(0, 0,  0, 10,  0, 5,  0, 15), Intersection::Overlapping((0, 5), (0, 10)));
-        assert_eq!(intersection(0, 0,  0, 10,  0, 0,  0, 5), Intersection::Overlapping((0, 0), (0, 5)));
+        assert_eq!(intersection(0, 0,  0, 10,  0, 0,  0, 5), Intersection::Overlapping((0, 5), (0, 0)));
         assert_eq!(intersection(0, 0,  0, 10,  0, 2,  0, 8), Intersection::Overlapping((0, 2), (0, 8)));
         assert_eq!(intersection(0,2, 0,8,  0,0, 0,10), Intersection::Overlapping((0, 2), (0, 8)));
 
@@ -1026,6 +1081,36 @@ mod test {
         assert_eq!(intersection(1,2, 1,1,  1,2, 1,3), Intersection::EndToEnd);
         assert_eq!(intersection(1,1, 1,2,  1,2, 1,3), Intersection::EndToEnd);
     }
+
+    fn test_overlapping(p1: (i32, i32), p2: (i32, i32), p3: (i32, i32), p4: (i32, i32), res1: (i32, i32), res2: (i32, i32)) {
+        let res = intersection(p1.0, p1.1, p2.0, p2.1, p3.0, p3.1, p4.0, p4.1);
+        assert!(res == Intersection::Overlapping(res1, res2) || res == Intersection::Overlapping(res2, res1));
+
+        let res = intersection(p2.0, p2.1, p1.0, p1.1, p3.0, p3.1, p4.0, p4.1);
+        assert!(res == Intersection::Overlapping(res1, res2) || res == Intersection::Overlapping(res2, res1), "res {:?}", res);
+
+        let res = intersection(p1.0, p1.1, p2.0, p2.1, p4.0, p4.1, p3.0, p3.1);
+        assert!(res == Intersection::Overlapping(res1, res2) || res == Intersection::Overlapping(res2, res1));
+
+        let res = intersection(p2.0, p2.1, p1.0, p1.1, p4.0, p4.1, p3.0, p3.1);
+        assert!(res == Intersection::Overlapping(res1, res2) || res == Intersection::Overlapping(res2, res1));
+    }
+
+    #[test]
+    fn intersect10() {
+        test_overlapping((0,2), (0,0), (0,0), (0,1),   (0, 0), (0, 1));
+
+        test_overlapping((2,0), (0,0), (0,0), (1,0),   (0, 0), (1, 0));
+
+        test_overlapping((0,0), (5,0), (-5,0), (1,0),   (0, 0), (1, 0));
+
+        test_overlapping((0,0), (0,5), (0,-5), (0,1),   (0, 0), (0, 1));
+
+        test_overlapping((-10,-10), (10,10), (0,0), (5,5),   (0, 0), (5, 5));
+
+        test_overlapping((0,0), (10,10), (0,0), (5,5),   (0, 0), (5, 5));
+    }
+
 
     #[test]
     fn validity_checks() {
@@ -1197,7 +1282,7 @@ mod test {
 
 
     #[test]
-    fn test_add_points_for_all_crossings1() {
+    fn add_points_for_all_crossings1() {
         test_no_change(add_points_for_all_crossings, LineString(vec![(0i32, 0i32).into()]));
         test_no_change(add_points_for_all_crossings, vec![(0, 0), (4, 0), (2, -1)].into());
         test_no_change(add_points_for_all_crossings, vec![(0, 0), (2, 0), (4, 0), (2, -1), (2, 0), (2, 1), (0,0)].into());
@@ -1207,28 +1292,28 @@ mod test {
     }
 
     #[test]
-    fn test_add_points_for_all_crossings2() {
+    fn add_points_for_all_crossings2() {
         expected_results(add_points_for_all_crossings, vec![(0, 0), (10, 0), (5, 0), (5, 10), (0, 0)].into(), vec![(0, 0), (5, 0), (10, 0), (5, 0), (5, 10), (0, 0)].into());
     }
     #[test]
-    fn test_add_points_for_all_crossings3() {
+    fn add_points_for_all_crossings3() {
         expected_results(add_points_for_all_crossings, vec![(0, 0), (10, 0), (-2, 0), (-2, 10), (0, 0)].into(), vec![(0, 0), (10, 0), (0, 0), (-2, 0), (-2, 10), (0, 0)].into());
     }
     #[test]
-    fn test_add_points_for_all_crossings4() {
+    fn add_points_for_all_crossings4() {
         expected_results(add_points_for_all_crossings,
                          vec![(0, 0), (100, 0), (100, 100), (70, 0), (50, 0), (0, 100), (0, 0)].into(),
                          vec![(0, 0), (50, 0), (70, 0), (100, 0), (100, 100), (70, 0), (50, 0), (0, 100), (0, 0)].into() );
     }
     #[test]
-    fn test_add_points_for_all_crossings5() {
+    fn add_points_for_all_crossings5() {
         expected_results(add_points_for_all_crossings,
                          vec![(0, 0), (100, 0), (110, 100), (110, 0), (50, 0), (0, 100), (0, 0)].into(),
                          vec![(0, 0), (50, 0), (100, 0), (110, 100), (110, 0), (100, 0), (50, 0), (0, 100), (0, 0)].into() );
     }
 
     #[test]
-    fn test_dissolve_into_rings1() {
+    fn dissolve_into_rings1() {
         test_no_change_own_vec(dissolve_into_rings, vec![(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)].into());
 
         // This polygon touches at a point (d). it should be 2 polygons
@@ -1259,7 +1344,7 @@ mod test {
     }
 
     #[test]
-    fn test_dissolve_into_rings2() {
+    fn dissolve_into_rings2() {
         let a = Point::new(0, 0); let b = Point::new(2, 0); let c = Point::new(3, 0);
         let d = Point::new(1, 1);
 
@@ -1276,7 +1361,7 @@ mod test {
     }
 
     #[test]
-    fn test_dissolve_into_rings3() {
+    fn dissolve_into_rings3() {
         let a = Point::new(0, 0); let c = Point::new(2, 0);
         let b = Point::new(1, 1); let d = Point::new(2, 1);
         let e = Point::new(1, 2); let f = Point::new(2, 2);
@@ -1296,7 +1381,7 @@ mod test {
     }
 
     #[test]
-    fn test_dissolve_into_rings4() {
+    fn dissolve_into_rings4() {
         // a-----b
         // | g-h |
         // e-f | |

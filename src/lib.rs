@@ -500,12 +500,12 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 continue;
             }
             let mut geom = geom.unwrap();
-            println!("\nBefore remove");
-            print_geom_as_geojson(&geom);
+            //println!("\nBefore remove");
+            //print_geom_as_geojson(&geom);
 
             simplify::remove_unneeded_points(&mut geom);
-            println!("\nAfter remove");
-            print_geom_as_geojson(&geom);
+            //println!("\nAfter remove");
+            //print_geom_as_geojson(&geom);
 
             //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             if bad_obj {
