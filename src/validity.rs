@@ -205,6 +205,23 @@ fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>
     false
 }
 
+fn in_bounds<U: Ord+Copy>(z: U, a: U, b: U) -> bool {
+    z >= min(a,b) && z <= max(a,b)
+}
+
+/// True iff point p is collinear with the line ab (NB: true if it goes beyond the ends)
+fn collinear<T: CoordinateType>(a: (T, T), b: (T, T), p: (T, T)) -> bool {
+    // (x2 - x1)(y - y1) == (y2 - y1)(x - x1)
+    (b.0 - a.0)*(p.1 - a.1) == (b.1 - a.1)*(p.0 - a.0)
+}
+
+/// True iff p lies on the line segment ab, i.e. between the two, incl a and not b
+/// Assumes that p is already collinear with ab
+fn point_on_line_incl_end<T: CoordinateType+Ord+Copy>(a: (T, T), b: (T, T), p: (T, T)) -> bool {
+    debug_assert!(collinear(a, b, p));
+    in_bounds(p.0, a.0, b.0) && in_bounds(p.1, a.1, b.1)
+}
+
 #[derive(PartialEq,Eq,Clone,Copy,Debug)]
 enum Intersection<T> {
     // They don't intersect/touch at all
@@ -263,15 +280,6 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
             return Intersection::Overlapping((x1, y1), (x2, y2));
         }
         
-        /// True iff point p is collinear with the line ab (NB: true if it goes beyond the ends)
-        fn collinear<T: CoordinateType>(a: (T, T), b: (T, T), p: (T, T)) -> bool {
-            // (x2 - x1)(y - y1) == (y2 - y1)(x - x1)
-            (b.0 - a.0)*(p.1 - a.1) == (b.1 - a.1)*(p.0 - a.0)
-        }
-
-        fn in_bounds<U: Ord+Copy>(z: U, a: U, b: U) -> bool {
-            z >= min(a,b) && z <= max(a,b)
-        }
 
         let p1_collinear_34 = collinear((x3, y3), (x4, y4), (x1, y1));
         let p2_collinear_34 = collinear((x3, y3), (x4, y4), (x2, y2));
@@ -284,12 +292,6 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
             (p != a) && (p != b) && in_bounds(p.0, a.0, b.0) && in_bounds(p.1, a.1, b.1)
         }
 
-        /// True iff p lies on the line segment ab, i.e. between the two, incl a and not b
-        /// Assumes that p is already collinear with ab
-        fn point_on_line_incl_end<T: CoordinateType+Ord+Copy>(a: (T, T), b: (T, T), p: (T, T)) -> bool {
-            debug_assert!(collinear(a, b, p));
-            in_bounds(p.0, a.0, b.0) && in_bounds(p.1, a.1, b.1)
-        }
 
         fn delta<T: Ord+Sub<Output=T>>(a: T, b: T) -> T {
             if a > b { a - b } else { b - a }
@@ -353,7 +355,7 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
                     },
                     (false, false) => {
                         // This can happen when 12 is a subset of 34
-                        debug_assert!(point_on_line((x3, y3), (x4, y4), (x1, y1)) && point_on_line((x3, y3), (x4, y4), (x2, y2)));
+                        debug_assert!(point_on_line_incl_end((x3, y3), (x4, y4), (x1, y1)) && point_on_line_incl_end((x3, y3), (x4, y4), (x2, y2)));
                         return Intersection::Overlapping((x1, y1), (x2, y2));
                     }
                 }
@@ -641,12 +643,19 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
     let mut loops = outgoing_segments.iter().filter(|&(_, v)| v.len() > 1).map(|(_, v)| v).collect::<Vec<_>>();
 
     if loops.len() == 1 {
-        if loops[0][0] == 0 && loops[0][1] == points.len()-1 {
+        if loops[0].len() == 2 && loops[0][0] == 0 && loops[0][1] == points.len()-1 {
             // start & end
             return vec![LineString(points)];
         } else {
-            eprintln!("points {:?}", points);
+            return Vec::new();
+            // FIXME do something here
+            // There is only one loop, and it is not a simple outer loop.
+            eprintln!("outgoing_segments {:?}", outgoing_segments);
+            //eprintln!("points {:?}", points);
             eprintln!("loops {:?}", loops);
+            for (i, p) in points.iter().enumerate() {
+                eprintln!("{:03} {:?},{:?}", i, p.x(), p.y());
+            }
             unreachable!();
         }
     }
@@ -654,7 +663,7 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
     let mut point_unassigned = vec![true; points.len()];
     let mut results: Vec<LineString<T>> = vec![];
 
-    if loops.iter().any(|idxes| idxes.len() == 2) {
+    if loops.iter().any(|idxes| idxes.len() != 2) {
         // FIXME do something here
         return vec![];
     }
@@ -669,9 +678,6 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
     // it contains)
     loops.sort_by_key(|i| (i[1]-i[0], i[0]));
     //println!("loops {:?}", loops);
-
-    // FIXME fix this
-    //assert!(loops.len() == 2);
 
     for loop_indexes in loops {
         assert!(loop_indexes.len() == 2);
@@ -865,18 +871,19 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
 
     for (ring, ring_type) in rings_with_type.into_iter() {
         match ring_type {
-            RingType::Exterior => {
-                exteriors.push(ring);
-            },
-            RingType::Interior => {
-                interiors.push(ring);
-            },
+            RingType::Exterior => { exteriors.push(ring); },
+            RingType::Interior => { interiors.push(ring); },
         }
     }
     assert!(!(exteriors.is_empty() && interiors.is_empty()));
 
-    // All interiours?!
-    assert!(!exteriors.is_empty());
+    if exteriors.is_empty() {
+        // FIXME implement this properly
+        return MultiPolygon(vec![]);
+    }
+    
+    // All interiors?!
+    assert!(!(exteriors.is_empty() && !interiors.is_empty()), "convert_rings_to_polygons {}\ninteriors {:?}\nexteriors {:?}\nno exteriors, but interiors", line!(), interiors, exteriors);
 
     let mut polygons: Vec<_> = exteriors.into_iter().map(|p| Polygon::new(p, vec![])).collect();
 
@@ -916,6 +923,11 @@ fn order_points<T: CoordinateType+Debug+Sub<Output=T>+Ord>(line: ((T, T), (T, T)
         return Ordering::Equal;
     }
     assert!(line.0 != line.1);
+
+    debug_assert!(collinear(line.0, line.1, p1));
+    debug_assert!(collinear(line.0, line.1, p2));
+    debug_assert!(point_on_line_incl_end(line.0, line.1, p1));
+    debug_assert!(point_on_line_incl_end(line.0, line.1, p2));
 
     fn sub<T: CoordinateType+Ord+Sub<Output=T>>(a: (T, T), b: (T, T)) -> (T, T) {
         (
@@ -1109,6 +1121,11 @@ mod test {
         test_overlapping((-10,-10), (10,10), (0,0), (5,5),   (0, 0), (5, 5));
 
         test_overlapping((0,0), (10,10), (0,0), (5,5),   (0, 0), (5, 5));
+    }
+
+    #[test]
+    fn intersect11() {
+        test_overlapping((0,0), (10,0), (10,0), (-2,0),   (0, 0), (10, 0));
     }
 
 
