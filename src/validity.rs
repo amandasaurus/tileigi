@@ -532,6 +532,11 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                         // (diagonal). That's returned as Crossing((1, 1)).
                         // So don't add a point if it would cause a duplicate
                         // We basically never want 2 identical points, one after the other
+
+                        // In cases of a diagonol crossing, the 3 points won't be collinear.
+                        //debug_assert!(collinear((x1, y1), (x2, y2), crosspoint), "L {} !collinear {:?} {:?} - {:?} {:?} point {:?}", line!(), (x1,y1), (x2, y2), (x3, y3), (x4, y4), crosspoint);
+                        //debug_assert!(point_on_line_incl_end((x1, y1), (x2, y2), crosspoint));
+
                         if (x1, y1) != crosspoint && (x2, y2) != crosspoint {
                             coords_to_insert.entry(i).or_insert(vec![]).push(crosspoint);
                         }
@@ -544,6 +549,10 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                         //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
                         //println!("i {} j {} overlapping {:?},{:?}", i, j, overlap1, overlap2);
                         debug_assert!(overlap1 != overlap2);
+                        //debug_assert!(collinear((x1, y1), (x2, y2), overlap1));
+                        //debug_assert!(point_on_line_incl_end((x1, y1), (x2, y2), overlap1));
+                        //debug_assert!(collinear((x1, y1), (x2, y2), overlap2));
+                        //debug_assert!(point_on_line_incl_end((x1, y1), (x2, y2), overlap2));
 
                         if (x1, y1) != overlap1 && (x2, y2) != overlap1 {
                             coords_to_insert.entry(i).or_insert(vec![]).push(overlap1);
@@ -564,6 +573,8 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                         //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
                         //println!("i {} j {} touching {:?},{:?}", i, j, x0, y0);
                         // (x0, y0) is the point where they touch
+                        debug_assert!(collinear((x1, y1), (x2, y2), (x0, y0)));
+                        debug_assert!(point_on_line_incl_end((x1, y1), (x2, y2), (x0, y0)));
                         if (x1,y1) == (x0,y0) || (x2,y2) == (x0,y0) {
                             // touching point is at end of line12, ergo it's in the middle of line34
                             coords_to_insert.entry(j).or_insert(vec![]).push((x0, y0));
@@ -589,6 +600,7 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
             let coords_to_insert = ls.0.windows(2).enumerate().filter_map(|(idx, points)| {
                 let (point1, point2) = (points[0], points[1]);
                 if let Some(mut new_points) = coords_to_insert.remove(&idx) {
+                    //println!("index {:?} point1 {:?} point2 {:?} new_points {:?}", idx, point1, point2, new_points);
                     new_points.sort_by(|&new_coord1, &new_coord2| order_points(((point1.x(), point1.y()), (point2.x(), point2.y())), new_coord1, new_coord2));
                     new_points.dedup();
                     Some((idx, new_points))
@@ -650,13 +662,13 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
             return Vec::new();
             // FIXME do something here
             // There is only one loop, and it is not a simple outer loop.
-            eprintln!("outgoing_segments {:?}", outgoing_segments);
-            //eprintln!("points {:?}", points);
-            eprintln!("loops {:?}", loops);
-            for (i, p) in points.iter().enumerate() {
-                eprintln!("{:03} {:?},{:?}", i, p.x(), p.y());
-            }
-            unreachable!();
+            //eprintln!("outgoing_segments {:?}", outgoing_segments);
+            ////eprintln!("points {:?}", points);
+            //eprintln!("loops {:?}", loops);
+            //for (i, p) in points.iter().enumerate() {
+            //    eprintln!("{:03} {:?},{:?}", i, p.x(), p.y());
+            //}
+            //unreachable!();
         }
     }
 
@@ -878,9 +890,16 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
     assert!(!(exteriors.is_empty() && interiors.is_empty()));
 
     if exteriors.is_empty() {
-        // FIXME implement this properly
+        // FIXME implement this properly, esp if there are interiors
         return MultiPolygon(vec![]);
     }
+
+    // this is a simple hack, take largest poly
+    exteriors.sort_unstable_by_key(|p| -1 * p.0.len() as i64);
+    let ring = exteriors.remove(0);
+    //println!("ring {}", ring.0.len());
+    return MultiPolygon(vec![Polygon::new(ring, vec![])]);
+
     
     // All interiors?!
     assert!(!(exteriors.is_empty() && !interiors.is_empty()), "convert_rings_to_polygons {}\ninteriors {:?}\nexteriors {:?}\nno exteriors, but interiors", line!(), interiors, exteriors);
@@ -924,10 +943,10 @@ fn order_points<T: CoordinateType+Debug+Sub<Output=T>+Ord>(line: ((T, T), (T, T)
     }
     assert!(line.0 != line.1);
 
-    debug_assert!(collinear(line.0, line.1, p1));
-    debug_assert!(collinear(line.0, line.1, p2));
-    debug_assert!(point_on_line_incl_end(line.0, line.1, p1));
-    debug_assert!(point_on_line_incl_end(line.0, line.1, p2));
+    //debug_assert!(collinear(line.0, line.1, p1), "line {:?} p1 {:?}", line, p1);
+    //debug_assert!(collinear(line.0, line.1, p2), "line {:?} p2 {:?}", line, p2);
+    //debug_assert!(point_on_line_incl_end(line.0, line.1, p1));
+    //debug_assert!(point_on_line_incl_end(line.0, line.1, p2));
 
     fn sub<T: CoordinateType+Ord+Sub<Output=T>>(a: (T, T), b: (T, T)) -> (T, T) {
         (
@@ -966,7 +985,7 @@ fn order_points<T: CoordinateType+Debug+Sub<Output=T>+Ord>(line: ((T, T), (T, T)
     let slope_2_1 = sub(p1, p2);
 
     // slope from p2 to the end
-    let slope_2_end = sub(line.1, p2);//((line.1).0 - p2.0, (line.1).1 - p2.1);
+    let slope_2_end = sub(line.1, p2);
     let slope_1_end = sub(line.1, p1);
 
     if add(slope_start_1, slope_1_2, slope_2_end) == slope_line {
@@ -1037,6 +1056,7 @@ mod test {
         // Rounded down to the nearest whole number in the coordinate system
         // They meet at (0.5, 0.5), so that's rounded to (1, 1)
         assert_eq!(intersection(0,0, 1,1,  1,0, 0,1), Intersection::Crossing((1, 1)));
+
     }
 
     #[test]
@@ -1128,6 +1148,17 @@ mod test {
         test_overlapping((0,0), (10,0), (10,0), (-2,0),   (0, 0), (10, 0));
     }
 
+    #[test]
+    fn intersect12() {
+        assert_eq!(intersection(0,0, 1,1,  1,0, 0,1), Intersection::Crossing((1, 1)));
+        assert_eq!(intersection(1,1, 0,0,  1,0, 0,1), Intersection::Crossing((1, 1)));
+        assert_eq!(intersection(0,0, 1,1,  0,1, 1,0), Intersection::Crossing((1, 1)));
+        assert_eq!(intersection(1,1, 0,0,  0,1, 1,0), Intersection::Crossing((1, 1)));
+
+        assert_eq!(intersection(3,1, 4,0,  3,0, 4,1), Intersection::Crossing((4, 1)));
+        assert_eq!(intersection(75,43, 76,42,  75,42, 76,43), Intersection::Crossing((76, 43)));
+        assert_eq!(intersection(1975,1243, 1976,1242,  1975,1242, 1976,1243), Intersection::Crossing((1976, 1243)));
+    }
 
     #[test]
     fn validity_checks() {
@@ -1576,6 +1607,11 @@ mod test {
 
         assert_eq!(order_points( ((0,0), (10, 0)), (5, 0), (10, 0) ), Ordering::Less );
         assert_eq!(order_points( ((0,0), (10, 0)), (10, 0), (5, 0) ), Ordering::Greater );
+    }
+
+    #[test]
+    fn order_points2() {
+        assert_eq!(order_points( ((29147, 10518), (17365, 10520)), (-16552, 10518), (-4238, 10518) ), Ordering::Greater );
     }
 
 }

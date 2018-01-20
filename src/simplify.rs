@@ -206,6 +206,10 @@ pub fn remove_points_in_line<T: CoordinateType+Debug>(geom: &mut Geometry<T>) {
 }
 
 fn remove_points_in_line_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
+    if ls.0.len() < 2 {
+        return;
+    }
+
     let slopes: Vec<_> = ls.0.windows(2).map(|points| {
         Fraction::new( points[1].x() - points[0].x(), points[1].y() - points[0].y() )
     }).collect();

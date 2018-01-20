@@ -246,7 +246,8 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
         },
         &TileDestinationType::MBTiles(ref path) => {
             let path = PathBuf::from(path);
-            write_tilejson(&layers, &connection_pool, &path);
+            //fs::create_dir_all(&path).unwrap();
+            //write_tilejson(&layers, &connection_pool, &path);
             let tile_dest = fileio::MBTiles::new(&path);
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
         },
@@ -507,6 +508,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             //println!("\nAfter remove");
             //print_geom_as_geojson(&geom);
 
+            let geom = validity::make_valid(geom);
+            //println!("\nAfter make_valid");
+            //print_geom_as_geojson(&geom);
+
             //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
@@ -631,6 +636,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     if bad_obj {
                         println!("\nL {} geom {:?}", line!(), geom);
                     }
+                    //println!("adding geom");
 
                     let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                     let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
@@ -814,11 +820,38 @@ fn y_to_lat(y: i32) -> f64 {
 }
 
 fn print_geom_as_geojson(geom: &Geometry<i32>) {
+    fn geojson(ls: &LineString<i32>) -> String {
+        format!("[{}]", ls.0.iter().map(|p| format!("[{}, {}]", x_to_lon(p.x()), y_to_lat(p.y()))).collect::<Vec<_>>().join(", "))
+    }
+
+
     println!("\n");
     match *geom {
         Geometry::Polygon(ref poly) => {
             print!("{{\"type\": \"Polygon\", \"coordinates\": [");
-            print!("[{}]", poly.exterior.0.iter().map(|p| format!("[{}, {}]", x_to_lon(p.x()), y_to_lat(p.y()))).collect::<Vec<_>>().join(", "));
+            print!("{}", geojson(&poly.exterior));
+            if !poly.interiors.is_empty() {
+                print!(", ");
+                print!("{}", poly.interiors.iter().map(|int| geojson(&int)).collect::<Vec<_>>().join(", "));
+            }
+            print!("]}}");
+        },
+        Geometry::MultiPolygon(ref mp) => {
+            print!("{{\"type\": \"MultiPolygon\", \"coordinates\": [");
+            let mut first = true;
+            for poly in mp.0.iter() {
+                if !first { print!(", "); }
+                print!("[");
+                print!("{}", geojson(&poly.exterior));
+                if !poly.interiors.is_empty() {
+                    print!(", ");
+                    print!("{}", poly.interiors.iter().map(|int| geojson(&int)).collect::<Vec<_>>().join(", "));
+                }
+                print!("]");
+                first = false;
+            }
+
+
             print!("]}}");
         },
         _ => unimplemented!(),
