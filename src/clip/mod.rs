@@ -96,25 +96,81 @@ fn intersection<T: CoordinateType>(p1: &Point<T>, p2: &Point<T>, border: &Border
         Border::XMin(xmin) => {
             let x = xmin;
             assert!(x1 != x2);
-            let y = ((y2-y1)/(x2 - x1))*(x - x1) + y1;
+
+            let a = y2 - y1;
+            let b = x - x1;
+            let c = x2 - x1;
+            let mut delta_y = T::zero();
+            delta_y = (a/c)*b;
+            if delta_y == T::zero() {
+                delta_y = (b/c)*a;
+                if delta_y == T::zero() {
+                    // might be overflow, but we presume not.
+                    delta_y = (a*b)/c;
+                }
+            }
+            let y = y1 + delta_y;
+
             (x, y)
         },
         Border::XMax(xmax) => {
             let x = xmax;
             assert!(x1 != x2);
-            let y = ((y2-y1)/(x2-x1))*(x - x1) + y1;
+
+            let a = y2 - y1;
+            let b = x - x1;
+            let c = x2 - x1;
+            let mut delta_y = T::zero();
+            delta_y = (a/c)*b;
+            if delta_y == T::zero() {
+                delta_y = (b/c)*a;
+                if delta_y == T::zero() {
+                    // might be overflow, but we presume not.
+                    delta_y = (a*b)/c;
+                }
+            }
+            let y = y1 + delta_y;
+
             (x, y)
         },
         Border::YMin(ymin) => {
             let y = ymin;
             assert!(y1 != y2);
-            let x = ((x2-x1)/(y2-y1))*(y - y1) + x1;
+
+            let a = x2 - x1;
+            let b = y - y1;
+            let c = y2 - y1;
+            let mut delta_x = T::zero();
+            delta_x = (a/c)*b;
+            if delta_x == T::zero() {
+                delta_x = (b/c)*a;
+                if delta_x == T::zero() {
+                    // might be overflow, but we presume not.
+                    delta_x = (a*b)/c;
+                }
+            }
+            let x = x1 + delta_x;
+
             (x, y)
         },
         Border::YMax(ymax) => {
             let y = ymax;
             assert!(y1 != y2);
-            let x = ((x2-x1)/(y2-y1))*(y - y1) + x1;
+
+            let a = x2 - x1;
+            let b = y - y1;
+            let c = y2 - y1;
+            let mut delta_x = T::zero();
+            delta_x = (a/c)*b;
+            if delta_x == T::zero() {
+                delta_x = (b/c)*a;
+                if delta_x == T::zero() {
+                    // might be overflow, but we presume not.
+                    delta_x = (a*b)/c;
+                }
+            }
+            let x = x1 + delta_x;
+
             (x, y)
         },
     }

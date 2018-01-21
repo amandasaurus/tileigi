@@ -163,3 +163,13 @@ fn result_valid_geom() {
         }
     }
 }
+
+#[test]
+fn intersect1() {
+
+    let border = Border::XMax(4096);
+    let p1 = Point::new(4823, 3340);
+    let p2 = Point::new(3962, 3222);
+    assert_eq!(intersection(&p1, &p2, &border), (4096, 3241));
+
+}
