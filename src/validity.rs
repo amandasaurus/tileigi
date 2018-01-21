@@ -192,6 +192,12 @@ fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>
             let (p3, p4) = (points34[0], points34[1]);
             //println!("looking at i {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, p1, p2, p3, p4);
 
+            if max(p1.x(), p2.x()) < min(p3.x(), p4.x()) || min(p1.x(), p2.x()) > max(p3.x(), p4.x())
+                || max(p1.y(), p2.y()) < min(p3.y(), p4.y()) || min(p1.y(), p2.y()) > max(p3.y(), p4.y())
+            {
+                continue;
+            }
+
             match intersection(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y(), p4.x(), p4.y()) {
                 Intersection::Crossing(_) | Intersection::Overlapping(_, _)  => { return true; },
                 Intersection::Touching(_) => { return true; },
@@ -523,6 +529,12 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                 let x3 = p3.x(); let y3 = p3.y();
                 let x4 = p4.x(); let y4 = p4.y();
                 //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
+
+                if max(x1, x2) < min(x3, x4) || min(x1, x2) > max(x3, x4)
+                    || max(y1, y2) < min(y3, y4) || min(y1, y2) > max(y3, y4)
+                {
+                    continue;
+                }
 
                 match intersection(x1, y1, x2, y2, x3, y3, x4, y4) {
                     Intersection::None | Intersection::EndToEnd => {},

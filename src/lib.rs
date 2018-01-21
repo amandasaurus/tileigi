@@ -631,18 +631,18 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
 
                 // FIXME we already do a is_valid & ensure_polygon_orientation above?
-                validity::ensure_polygon_orientation(&mut geom);
-                if is_valid(&geom) {
-                    if bad_obj {
-                        println!("\nL {} geom {:?}", line!(), geom);
-                    }
+                debug_assert!(is_valid(&geom));
+                //validity::ensure_polygon_orientation(&mut geom);
 
-                    let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
-                    let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
-                    let mvt_tile = results.get_mut(i).unwrap();
-                    mvt_tile.add_feature(&layer_name, feature);
-
+                if bad_obj {
+                    println!("\nL {} geom {:?}", line!(), geom);
                 }
+
+                let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
+                let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
+                let mvt_tile = results.get_mut(i).unwrap();
+                mvt_tile.add_feature(&layer_name, feature);
+
             };
 
             loop {
