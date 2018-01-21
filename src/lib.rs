@@ -626,7 +626,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }).collect();
             geoms.reverse();
 
-            println!("\nL {} geoms {:?}", line!(), geoms);
+            //println!("\nL {} geoms {:?}", line!(), geoms);
 
             let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>| {
 
@@ -634,7 +634,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 let j = (tile.y() - metatile.y()) as i32;
 
                 geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
-                println!("\nL {} geom {:?}", line!(), geom);
+                //println!("\nL {} geom {:?}", line!(), geom);
 
 
                 // FIXME we already do a is_valid & ensure_polygon_orientation above?
