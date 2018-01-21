@@ -23,11 +23,11 @@ fn remap() {
 
 #[test]
 fn xy_to_latlon() {
-    assert!(x_to_lon(0) - -180. < 1e-7);
-    assert!(x_to_lon(2048) - 0. < 1e-7);
-    assert!(x_to_lon(4096) - 180. < 1e-7);
+    assert!(x_to_lon(0, 4096.) - -180. < 1e-7);
+    assert!(x_to_lon(2048, 4096.) - 0. < 1e-7);
+    assert!(x_to_lon(4096, 4096.) - 180. < 1e-7);
 
-    assert!(y_to_lat(0) - 85.0511287798066 < 1e-7);
-    assert!(y_to_lat(2048) - 0. < 1e-7);
-    assert!(y_to_lat(4096) - -85.05112 < 1e-7);
+    assert!(y_to_lat(0, 4096.) - 85.0511287798066 < 1e-7);
+    assert!(y_to_lat(2048, 4096.) - 0. < 1e-7);
+    assert!(y_to_lat(4096, 4096.) - -85.05112 < 1e-7);
 }
