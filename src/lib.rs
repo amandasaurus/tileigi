@@ -500,6 +500,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }
                 continue;
             }
+            if bad_obj {
+                println!("\nL {} geom {:?}", line!(), geom);
+            }
             let mut geom = geom.unwrap();
             //println!("\nBefore remove");
             //print_geom_as_geojson(&geom);
@@ -510,7 +513,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             let geom = validity::make_valid(geom);
             //println!("\nAfter make_valid");
-            //print_geom_as_geojson(&geom);
+            //print_geom_as_geojson(&geom, extent);
 
             //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             if bad_obj {
@@ -623,12 +626,16 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }).collect();
             geoms.reverse();
 
+            println!("\nL {} geoms {:?}", line!(), geoms);
+
             let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>| {
 
                 let i = (tile.x() - metatile.x()) as i32;
                 let j = (tile.y() - metatile.y()) as i32;
 
                 geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
+                println!("\nL {} geom {:?}", line!(), geom);
+
 
                 // FIXME we already do a is_valid & ensure_polygon_orientation above?
                 debug_assert!(is_valid(&geom));
@@ -684,6 +691,8 @@ fn remap_linestring(ls: LineString<f64>, minx: f64, maxx: f64, miny: f64, maxy: 
     let remap_xy = |x: f64, y: f64| -> (i32, i32) {
         (
             conv(((x - minx) / (maxx - minx))*size),
+
+            // y axies goes down, hence different ordering for y
             conv(((maxy - y) / (maxy - miny))*size)
         )
     };
@@ -799,30 +808,29 @@ fn remap_geometry(geom: Geometry<f64>, minx: f64, maxx: f64, miny: f64, maxy: f6
     }
 }
 
-fn x_to_lon(x: i32) -> f64 {
+fn x_to_lon(x: i32, extent: f64) -> f64 {
     let earth_radius = 6378137.;
     let x = x as f64;
-    let x = (x/4096.) * (2.*20037508.34) - 20037508.34;
+    let x = (x/extent) * (2.*20037508.34) - 20037508.34;
     //let x = self.lon() * 20037508.34 / 180.;
 
     (x/earth_radius).to_degrees()
 }
 
-fn y_to_lat(y: i32) -> f64 {
+fn y_to_lat(y: i32, extent: f64) -> f64 {
     let old_y = y;
     let y = y as f64;
-    let y = y/4096.;
+    let y = y/extent;
     
     let pi = std::f64::consts::PI;
 
     ((1. - 2.*y) * pi).sinh().atan().to_degrees()
 }
 
-fn print_geom_as_geojson(geom: &Geometry<i32>) {
-    fn geojson(ls: &LineString<i32>) -> String {
-        format!("[{}]", ls.0.iter().map(|p| format!("[{}, {}]", x_to_lon(p.x()), y_to_lat(p.y()))).collect::<Vec<_>>().join(", "))
-    }
-
+fn print_geom_as_geojson(geom: &Geometry<i32>, extent: f64) {
+    let geojson = |ls: &LineString<i32>| -> String {
+        format!("[{}]", ls.0.iter().map(|p| format!("[{}, {}]", x_to_lon(p.x(), extent), y_to_lat(p.y(), extent))).collect::<Vec<_>>().join(", "))
+    };
 
     println!("\n");
     match *geom {
