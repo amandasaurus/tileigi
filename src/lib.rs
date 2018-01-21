@@ -504,7 +504,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             //println!("\nBefore remove");
             //print_geom_as_geojson(&geom);
 
-            simplify::remove_unneeded_points(&mut geom);
+            //simplify::remove_unneeded_points(&mut geom);
             //println!("\nAfter remove");
             //print_geom_as_geojson(&geom);
 
@@ -636,7 +636,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     if bad_obj {
                         println!("\nL {} geom {:?}", line!(), geom);
                     }
-                    //println!("adding geom");
 
                     let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
                     let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;

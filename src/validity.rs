@@ -474,6 +474,8 @@ fn make_rings_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut rings: Vec<Line
     let rings: Vec<LineString<T>> = rings.into_iter().flat_map(|mut ring| {
         add_points_for_all_crossings(&mut ring);
         let these_rings = dissolve_into_rings(ring);
+        //println!("L {} these_rings {:?}", line!(), these_rings);
+        //println!("L {} these_rings.len() {:?}", line!(), these_rings.len());
         these_rings.into_iter()
     }).collect();
 
@@ -649,16 +651,17 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
         outgoing_segments.entry((p.x(), p.y())).or_insert(vec![]).push(i);
     }
 
-    //println!("outgoing_segments {:?}", outgoing_segments);
     // loops: a Vec of Vec's. Each inner vec is 2 point indexes, and means 'there is a loop from
     // this point to that point'
     let mut loops = outgoing_segments.iter().filter(|&(_, v)| v.len() > 1).map(|(_, v)| v).collect::<Vec<_>>();
+    //println!("loops {:?}", loops);
 
     if loops.len() == 1 {
         if loops[0].len() == 2 && loops[0][0] == 0 && loops[0][1] == points.len()-1 {
             // start & end
             return vec![LineString(points)];
         } else {
+            //eprintln!("L {} loops {:?}", line!(), loops);
             return Vec::new();
             // FIXME do something here
             // There is only one loop, and it is not a simple outer loop.
@@ -675,7 +678,12 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
     let mut point_unassigned = vec![true; points.len()];
     let mut results: Vec<LineString<T>> = vec![];
 
+    // Remove weird loops.
+    // This is not ideal, but it seems to make valid geometries for MbSC
+    let mut loops = loops.into_iter().filter(|idxes| idxes.len() == 2).collect::<Vec<_>>();
+
     if loops.iter().any(|idxes| idxes.len() != 2) {
+        eprintln!("L {} loops {:?}", line!(), loops);
         // FIXME do something here
         return vec![];
     }
