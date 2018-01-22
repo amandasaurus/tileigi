@@ -92,14 +92,14 @@ impl ConnectionPool {
 
 }
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct Layers {
     layers: Vec<Layer>,
     global_maxzoom: u8,
     global_minzoom: u8,
 }
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 struct Layer {
     minzoom: u8,
     maxzoom: u8,
