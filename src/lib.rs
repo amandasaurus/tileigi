@@ -362,11 +362,12 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(St
                 "int4" => Some("Number".to_string()),
                 "int8" => Some("Number".to_string()),
                 "numeric" => Some("Number".to_string()),
+                "varchar" => Some("String".to_string()),
                 
                 // why is there unknown?
                 "unknown" => None,
                 x => {
-                    eprintln!("Postgres type {:?} not known", x);
+                    eprintln!("Postgres type {:?} not known for layer {:?}", x, layer);
                     unimplemented!()
                 },
             };
