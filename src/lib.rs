@@ -664,21 +664,23 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
 
 fn remap_linestring(ls: LineString<f64>, minx: f64, maxx: f64, miny: f64, maxy: f64, size: f64, should_be_ring: bool) -> Option<LineString<i32>> {
-    fn conv(x: f64) -> i32 {
+    
+    let remap_xy = |x: f64, y: f64| -> (i32, i32) {
+        let x: f64 = ((x - minx) / (maxx - minx))*size;
         let x = x.round();
         debug_assert!(x <= i32::max_value() as f64);
         debug_assert!(x >= i32::min_value() as f64);
+        let x: i32 = x as i32;
 
-        x as i32
-    }
-    
-    let remap_xy = |x: f64, y: f64| -> (i32, i32) {
-        (
-            conv(((x - minx) / (maxx - minx))*size),
+        // y axies goes down, hence different ordering for y
+        let y: f64 = ((maxy - y) / (maxy - miny))*size;
+        let y = y.round();
+        debug_assert!(y <= i32::max_value() as f64);
+        debug_assert!(y >= i32::min_value() as f64);
+        let y: i32 = y as i32;
 
-            // y axies goes down, hence different ordering for y
-            conv(((maxy - y) / (maxy - miny))*size)
-        )
+
+        (x, y)
     };
 
     let mut new_points: Vec<Point<_>> = Vec::with_capacity(ls.0.len());
