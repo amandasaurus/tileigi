@@ -510,7 +510,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             //println!("\nAfter remove");
             //print_geom_as_geojson(&geom);
 
-            let geom = validity::make_valid(geom);
+            //let geom = validity::make_valid(geom);
             //println!("\nAfter make_valid");
             //print_geom_as_geojson(&geom, extent);
 
