@@ -506,7 +506,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             //println!("\nBefore remove");
             //print_geom_as_geojson(&geom);
 
-            //simplify::remove_unneeded_points(&mut geom);
+            simplify::remove_unneeded_points(&mut geom);
             //println!("\nAfter remove");
             //print_geom_as_geojson(&geom);
 
