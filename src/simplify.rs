@@ -52,11 +52,11 @@ fn point_line_distance_sqr(point: &Point<i32>, start: &Point<i32>, end: &Point<i
     }
 }
 
-// Ramer–Douglas-Peucker line simplification algorithm
+// Ramer-Douglas-Peucker line simplification algorithm
 fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>>
 {
     let initial_num_points = points.len();
-    if points.is_empty() || points.len() <= 2 {
+    if points.is_empty() || initial_num_points <= 2 {
         return points;
     }
 
@@ -64,25 +64,24 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>>
     let mut num_points_to_keep = points.len();
     let mut segments_to_look_at: Vec<(usize, usize)> = vec![];
 
-    segments_to_look_at.push((0, points.len()-1));
+    segments_to_look_at.push((0, initial_num_points-1));
 
     let e = epsilon as i64;
     let e = Fraction::new(e*e, 1);
 
+    let mut dmax_sqr: Fraction<i64> = Fraction::new(0, 1);
+    let mut distance_sqr: Fraction<i64>;
+    let mut index: usize;
+
     loop {
-        if segments_to_look_at.is_empty() {
-            break;
-        }
+        let (start_idx, end_idx) = match segments_to_look_at.pop() {
+            None => { break; },
+            Some(x) => x,
+        };
 
-        let (start_idx, end_idx) = segments_to_look_at.pop().unwrap();
-        if start_idx + 1 == end_idx {
-            continue;
-        }
-
+        assert!(start_idx+1 == end_idx);
         
-        let mut dmax_sqr: Fraction<i64> = Fraction::new(0, 1);
-        let mut index: usize = start_idx;
-        let mut distance_sqr: Fraction<i64>;
+        index = start_idx;
 
         for (i, point) in points[start_idx+1..end_idx].iter().enumerate() {
             if points_to_keep[i+start_idx] {
@@ -99,8 +98,8 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>>
             segments_to_look_at.push((start_idx, index));
             segments_to_look_at.push((index, end_idx));
         } else {
-            for i in start_idx+1..end_idx {
-                points_to_keep[i] = false;
+            for flag in points_to_keep[start_idx+1..end_idx].iter_mut() {
+                *flag = false;
             }
         }
     }
