@@ -6,8 +6,8 @@ use fraction::Fraction;
 use geo::*;
 
 fn distance_sqr(a: &Point<i32>, b: &Point<i32>) -> i64 {
-    let delta_x = if a.x() > b.x() { a.x() - b.x() } else { b.x() - a.x() };
-    let delta_y = if a.y() > b.y() { a.y() - b.y() } else { b.y() - a.y() };
+    let delta_x = (a.x() - b.x()).abs();
+    let delta_y = (a.y() - b.y()).abs();
     let delta_x = delta_x as i64;
     let delta_y = delta_y as i64;
     assert!(delta_x >= 0);
