@@ -440,6 +440,7 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
 
 pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut geom: Geometry<T>) -> Geometry<T> {
     simplify::remove_unneeded_points(&mut geom);
+
     match geom {
         Geometry::Polygon(p) => Geometry::MultiPolygon(make_polygon_valid(p)),
         Geometry::MultiPolygon(mp) => Geometry::MultiPolygon(make_multipolygon_valid(mp)),
@@ -827,6 +828,8 @@ fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index
 
     'start_point: for point in ring.0.iter() {
         num_crossings = 0;
+        let point_x = point.x();
+        let point_y = point.y();
 
         
         // loop over all the rings
@@ -837,6 +840,11 @@ fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index
             // then all the segments in this ring
             for other_points in ring.0.windows(2) {
                 debug_assert!(other_points.len() == 2);
+
+                if ( other_points[0].y() > point_y && other_points[1].y() > point_y ) || ( other_points[0].y() < point_y && other_points[1].y() < point_y ) || (other_points[0].x() > point_x && other_points[1].x() > point_x ) {
+                    // line is entirely above, below or to right of point.
+                    continue;
+                }
 
                 //println!("other_points {:?}, does_ray_cross {:?}", other_points, does_ray_cross(&point, &other_points[0], &other_points[1]));
                 match does_ray_cross(&point, &other_points[0], &other_points[1]) {
