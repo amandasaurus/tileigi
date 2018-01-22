@@ -527,6 +527,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                         Some(g) => g,
                     }
             } else { geom };
+            if bad_obj {
+                println!("\nL {} geom {:?}", line!(), geom);
+            }
             //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             
             // After simplifying a geometry, it's possible it becomes invalid. So we just skip the
