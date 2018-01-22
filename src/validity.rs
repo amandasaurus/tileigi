@@ -150,16 +150,11 @@ fn num_points_excl_duplicates<T: CoordinateType>(ls: &LineString<T>) -> usize {
 
 }
 
-
-
-
 pub fn ensure_polygon_orientation<T: CoordinateType>(geom: &mut Geometry<T>) {
     match *geom {
         Geometry::Polygon(ref mut p) => {
-            // This is stupid, this is supposed to be the other way around!!
-            // FIXME check the geo code for winding, make sure it's not the wrong way around
-            // Is this because in MVT the Y goes down? Hence the winding is the other way?
-            // Investigate
+            // Y goes positive down, ergo the winding order is 'wrong way around' since the winding
+            // order code works with y up
             p.exterior.make_clockwise_winding();
             for i in p.interiors.iter_mut() {
                 i.make_counterclockwise_winding();
@@ -673,7 +668,6 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
             // start & end
             return vec![LineString(points)];
         } else {
-            //eprintln!("L {} loops {:?}", line!(), loops);
             return Vec::new();
             // FIXME do something here
             // There is only one loop, and it is not a simple outer loop.

@@ -507,7 +507,7 @@ fn all_points_in_one_tile(metatile: &Metatile, ls: &LineString<i32>, buffer: i32
 pub fn clip_linestring_to_tiles(metatile: &Metatile, mut ls: LineString<i32>, buffer: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
     assert_eq!(buffer, 0);
     // Are all the points in the linestring in the same tile? If so, we can skip a lot of steps
-    // FIXME this is not buffer aware.
+    // TODO this is not buffer aware.
     let size = metatile.size() as u32;
 
     let single_tile = all_points_in_one_tile(metatile, &ls, buffer);
@@ -522,7 +522,7 @@ pub fn clip_linestring_to_tiles(metatile: &Metatile, mut ls: LineString<i32>, bu
                 vec![(slippy_map_tiles::Tile::new(metatile.zoom(), (tile_x as u32)+metatile.x(), (tile_y as u32)+metatile.y()).unwrap(), Some(Geometry::LineString(ls)))]
             } else {
                 // Dunno why
-                // FIXME why is this needed
+                // TODO why is this needed
                 slice_box(Cow::Owned(Geometry::LineString(ls)), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i32*4096, buffer)
             }
         },
@@ -531,7 +531,7 @@ pub fn clip_linestring_to_tiles(metatile: &Metatile, mut ls: LineString<i32>, bu
 }
 
 pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i32>, buffer: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
-    // FIXME support buffer
+    // TODO support buffer
     assert_eq!(buffer, 0);
     let metatile_scale = metatile.size() as u32;
 
@@ -545,7 +545,7 @@ pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i32>, buffer: i32) 
     let tile_y_offset = y % 4096;
 
 
-    // FIXME fill in
+    // TODO fill in
     if tile_x > 0 && tile_y > 0 && tile_x < metatile_scale && tile_y < metatile_scale {
         vec![(slippy_map_tiles::Tile::new(metatile.zoom(), tile_x, tile_y).unwrap(), Some(Geometry::Point(Point::new(tile_x_offset, tile_y_offset))))]
     } else {
@@ -554,7 +554,7 @@ pub fn clip_point_to_tiles(metatile: &Metatile, point: Point<i32>, buffer: i32) 
 }
 
 pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i32>, buffer: i32) -> Vec<(slippy_map_tiles::Tile, Option<Geometry<i32>>)> {
-    // FIXME somehow in this method, it's making invalid polygons where the last point != first
+    // TODO somehow in this method, it's making invalid polygons where the last point != first
     // point
     // Simple approach for now
     let mut res = slice_box(Cow::Owned(geom), metatile.size(), metatile.zoom(), metatile.x(), metatile.y(), 0, 0, metatile.size() as i32*4096, buffer);
@@ -562,7 +562,7 @@ pub fn clip_geometry_to_tiles(metatile: &Metatile, geom: Geometry<i32>, buffer: 
     // TODO make the slice_box etc not produce geoms with this result
     for &mut (tile, ref mut geom_opt) in res.iter_mut() {
         if let &mut Some(ref mut geom) = geom_opt {
-            // FIXME replace with remove_unneeded_points ?
+            // TODO replace with remove_unneeded_points ?
             remove_duplicate_points(geom);
         }
     }

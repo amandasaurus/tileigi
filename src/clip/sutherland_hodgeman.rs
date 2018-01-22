@@ -13,7 +13,7 @@ fn clip_ring_to_border<T: CoordinateType>(ring: Cow<LineString<T>>, border: &Bor
     if ring.0.len() < 3 {
         //eprintln!("\n\n\nBorder: {:?} Rings: {:?}", border, ring);
         //eprintln!("{:?}", ring.0);
-        // FIXME something better
+        // TODO something better
         return None;
     }
     assert!(ring.0.len() >= 3);

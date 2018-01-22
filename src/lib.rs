@@ -140,11 +140,10 @@ impl Layers {
                 dbname: layer["Datasource"]["dbname"].as_str().map(|x| x.to_owned()),
                 minzoom: layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(global_minzoom) as u8,
                 maxzoom: layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(global_maxzoom) as u8,
-                // FIXME buffer is making different layers offset at different amounts
                 buffer: layer["properties"]["buffer-size"].as_i64().map(|x| x as u16).unwrap_or(0) as u16,
                 table: layer["Datasource"]["table"].as_str().unwrap().to_owned(),
             })
-            // FIXME finish this thing
+            // TODO finish this thing
             //.map(|layer| {
             //    layer["Datasource"]["table"].as_str().unwrap()
             //        .replace("!bbox!", "$1")
@@ -294,7 +293,7 @@ fn worker(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: Sender<FileIOM
         let tiles = single_metatile(&layers, &metatile, &connection_pool);
         let num_tiles = tiles.len();
 
-        // FIXME the tile exists check needs to work with metatiles
+        // TODO the tile exists check needs to work with metatiles
 
         for (tile, pbf) in tiles.into_iter() {
             let bytes = pbf.to_compressed_bytes();
@@ -405,8 +404,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         let conn = connection_pool.connection_for_layer(&layer_name);
         
         let table = &layer.table;
-        // FIXME should this be 4096??
-        // FIXME not confident about this calculation.
+        // TODO should this be 4096??
+        // TODO not confident about this calculation.
         let canvas_size = 256.*(metatile.size() as f64);
         let ll = metatile.sw_corner().to_3857();
         let ur = metatile.ne_corner().to_3857();
@@ -576,7 +575,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     "int4" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i32 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
                     "int8" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i64 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
                     
-                    // FIXME not 100% sure numeric is correct here
+                    // TODO not 100% sure numeric is correct here
                     "numeric" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Double)).unwrap_or(None),
                     
                     // why is there unknown?
@@ -604,7 +603,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             //
             // We want to do this in order, so we reverse the vec, and the pop from the end
             // (which is the original front).
-            // FIXME rather than filtering out invalid geoms here, prevent the clipping code from
+            // TODO rather than filtering out invalid geoms here, prevent the clipping code from
             // generating invalid geoms in the first place
             // One error was creating a linestring with 2 points, both the same
             if bad_obj {
@@ -626,7 +625,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }).collect();
             geoms.reverse();
 
-            //println!("\nL {} geoms {:?}", line!(), geoms);
 
             let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>| {
 
@@ -634,12 +632,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 let j = (tile.y() - metatile.y()) as i32;
 
                 geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
-                //println!("\nL {} geom {:?}", line!(), geom);
 
-
-                // FIXME we already do a is_valid & ensure_polygon_orientation above?
                 debug_assert!(is_valid(&geom));
-                //validity::ensure_polygon_orientation(&mut geom);
 
                 if bad_obj {
                     println!("\nL {} geom {:?}", line!(), geom);
