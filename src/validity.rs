@@ -473,14 +473,14 @@ fn make_polygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut p: Polygon<T>
 
 fn make_rings_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut rings: Vec<LineString<T>>) -> MultiPolygon<T> {
 
-    let rings: Vec<LineString<T>> = rings.into_iter().flat_map(|mut ring| {
+    let mut new_rings: Vec<LineString<T>> = Vec::with_capacity(rings.len());
+    for mut ring in rings.into_iter() {
         add_points_for_all_crossings(&mut ring);
-        let these_rings = dissolve_into_rings(ring);
-        //println!("L {} these_rings {:?}", line!(), these_rings);
-        //println!("L {} these_rings.len() {:?}", line!(), these_rings.len());
-        these_rings.into_iter()
-    }).collect();
+        let mut these_rings = dissolve_into_rings(ring);
+        new_rings.append(&mut these_rings);
+    }
 
+    let rings = new_rings;
     
     let result = convert_rings_to_polygons(rings);
 
