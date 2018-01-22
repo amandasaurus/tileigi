@@ -178,27 +178,25 @@ fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>
         // With 4 points, it's a orientation, not self-intersection thing really
         return false;
     }
-    //println!("\n\nXXX\nls {:?}\n", ls);
 
     for (i, points12) in ls.0.windows(2).enumerate() {
         let (p1, p2) = (points12[0], points12[1]);
         
         for points34 in ls.0[i+1..].windows(2).take(ls.0.len()-i-1) {
-            let (p3, p4) = (points34[0], points34[1]);
-            //println!("looking at i {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, p1, p2, p3, p4);
 
-            if max(p1.x(), p2.x()) < min(p3.x(), p4.x()) || min(p1.x(), p2.x()) > max(p3.x(), p4.x())
-                || max(p1.y(), p2.y()) < min(p3.y(), p4.y()) || min(p1.y(), p2.y()) > max(p3.y(), p4.y())
+            if max(p1.x(), p2.x()) < min(points34[0].x(), points34[1].x()) || min(p1.x(), p2.x()) > max(points34[0].x(), points34[1].x())
+                || max(p1.y(), p2.y()) < min(points34[0].y(), points34[1].y()) || min(p1.y(), p2.y()) > max(points34[0].y(), points34[1].y())
             {
                 continue;
             }
+            // For some reason it's a little faster to do this here after the check
+            let (p3, p4) = (points34[0], points34[1]);
 
             match intersection(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y(), p4.x(), p4.y()) {
                 Intersection::Crossing(_) | Intersection::Overlapping(_, _)  => { return true; },
                 Intersection::Touching(_) => { return true; },
                 Intersection::None | Intersection::EndToEnd => {},
             }
-            //println!("no intersection");
         }
     }
 
