@@ -503,16 +503,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 println!("\nL {} geom {:?}", line!(), geom);
             }
             let mut geom = geom.unwrap();
-            //println!("\nBefore remove");
-            //print_geom_as_geojson(&geom);
 
             simplify::remove_unneeded_points(&mut geom);
-            //println!("\nAfter remove");
-            //print_geom_as_geojson(&geom);
 
             //let geom = validity::make_valid(geom);
-            //println!("\nAfter make_valid");
-            //print_geom_as_geojson(&geom, extent);
 
             //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             if bad_obj {
@@ -531,13 +525,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                         Some(g) => g,
                     }
             } else { geom };
-            //println!("\nAfter simplify");
-            //print_geom_as_geojson(&geom);
             //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
-            //println!("\nL {} geom {:?}", line!(), geom);
-            //if bad_obj {
-            //    println!("\nL {} geom {:?}", line!(), geom);
-            //}
             
             // After simplifying a geometry, it's possible it becomes invalid. So we just skip the
             // geometries in that case.
@@ -557,7 +545,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             let geom = validity::make_valid(geom);
             debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:?}", line!(), geom);
-            //println!("\nL {} geom {:?}", line!(), geom);
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
@@ -597,15 +584,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             }
 
 
-            // In cases where there is only one geometry here, we don't want to clone the
-            // `properties`, and instead move it. If there are N geometries, we want to do N-1
-            // clones, and 1 move. Hence the duplication with the loop.
-            //
-            // We want to do this in order, so we reverse the vec, and the pop from the end
-            // (which is the original front).
-            // TODO rather than filtering out invalid geoms here, prevent the clipping code from
-            // generating invalid geoms in the first place
-            // One error was creating a linestring with 2 points, both the same
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
@@ -613,7 +591,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 |(t, g)| match g {
                     Some(mut g) => {
                         //debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
-                        //println!("\nL {} geom {:?}\nvalid: {}", line!(), g, is_valid(&g));
                         if is_valid(&g) {
                             validity::ensure_polygon_orientation(&mut g);
                             Some((t, g))
@@ -646,6 +623,15 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             };
 
+            // In cases where there is only one geometry here, we don't want to clone the
+            // `properties`, and instead move it. If there are N geometries, we want to do N-1
+            // clones, and 1 move. Hence the duplication with the loop.
+            //
+            // We want to do this in order, so we reverse the vec, and the pop from the end
+            // (which is the original front).
+            // TODO rather than filtering out invalid geoms here, prevent the clipping code from
+            // generating invalid geoms in the first place
+            // One error was creating a linestring with 2 points, both the same
             loop {
                 if geoms.len() <= 1 { break; }
                 if let Some((tile, geom)) = geoms.pop() {
