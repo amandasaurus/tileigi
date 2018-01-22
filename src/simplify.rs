@@ -325,7 +325,10 @@ fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
     loop {
         let mut have_removed_points = false;
 
+        // keep_point[i] = true means we should keep this point. false means remove it.
+        let mut keep_point = vec![true; ls.0.len()];
         let mut i = 1;
+        let mut points_removed = 0;
 
         loop {
             if i >= (ls.0.len() - 1) {
@@ -336,16 +339,18 @@ fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
             let p2 = ls.0[i];
             let p3 = ls.0[i+1];
             if twice_triangle_area(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y()) == T::zero() {
-                //println!("Removing point {}", i);
-                ls.0.remove(i);
-                have_removed_points = true;
+                keep_point[i] = false;
+                points_removed += 1;
             }
             i += 1;
         }
 
-        // keep removing until we haven't removed anything
-        if have_removed_points {
-            //println!("going again");
+        if points_removed > 0 {
+            // Create a new vec of points but only the ones we want to keep
+            let new_points: Vec<Point<T>> = ls.0.drain(..).zip(keep_point.into_iter()).filter_map(|(p, keep)| if keep { Some(p) } else { None }).collect();
+            
+            // and move that in for the points
+            ::std::mem::replace(&mut ls.0, new_points);
             continue;
         } else {
             break;
