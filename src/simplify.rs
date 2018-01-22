@@ -79,9 +79,13 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>>
             Some(x) => x,
         };
 
-        assert!(start_idx+1 == end_idx);
+        if start_idx + 1 == end_idx {
+            continue;
+        }
+        assert!(start_idx+1 != end_idx);
         
         index = start_idx;
+        dmax_sqr = Fraction::new(0, 1);
 
         for (i, point) in points[start_idx+1..end_idx].iter().enumerate() {
             if points_to_keep[i+start_idx] {
