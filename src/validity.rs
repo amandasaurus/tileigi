@@ -438,6 +438,9 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
 
 pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut geom: Geometry<T>) -> Geometry<T> {
     simplify::remove_unneeded_points(&mut geom);
+    if is_valid(&geom) {
+        return geom;
+    }
 
     match geom {
         Geometry::Polygon(p) => Geometry::MultiPolygon(make_polygon_valid(p)),
