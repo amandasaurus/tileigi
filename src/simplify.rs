@@ -310,10 +310,6 @@ fn remove_duplicate_points_linestring<T: CoordinateType+Debug>(ls: &mut LineStri
     }
 }
 
-fn twice_triangle_area<T: CoordinateType+Debug>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T) -> T {
-    (x1 - x3)*(y2 - y1) - (x1 - x2)*(y3 - y1)
-}
-
 fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
     // TODO There is definitely a more effecient way to do this. There is certainly a lot of
     // memory moving.
@@ -337,7 +333,9 @@ fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
             let p1 = ls.0[i-1];
             let p2 = ls.0[i];
             let p3 = ls.0[i+1];
-            if twice_triangle_area(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y()) == T::zero() {
+            // This algorithm is 'twice the triangle area'. If it's 0 (i.e. both sides are equal),
+            // then it's a zero area, i.e. spike.
+            if (p1.x() - p3.x())*(p2.y() - p1.y()) == (p1.x() - p2.x())*(p3.y() - p1.y()) {
                 keep_point[i] = false;
                 points_removed += 1;
             }
