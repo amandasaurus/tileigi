@@ -82,7 +82,7 @@ fn point_line_distance_sqr(point: &Point<i32>, start: &Point<i32>, end: &Point<i
 fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
     println!("{} L {}", file!(), line!());
     let initial_num_points = points.len();
-    if points.is_empty() || initial_num_points <= 2 {
+    if initial_num_points <= 2 {
         return points;
     }
 
