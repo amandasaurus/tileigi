@@ -1,6 +1,26 @@
 use std::cmp::Ordering;
 use std::ops::Neg;
 use geo::*;
+use std::fmt::Debug;
+use std::ops::{Div,Rem,Mul,AddAssign,SubAssign};
+use std::cmp::min;
+
+fn gcd<T: CoordinateType+Rem>(mut a: T, mut b: T) -> T {
+    while b != T::zero() {
+        let t = b;
+        b = a % b;
+        a = t
+    }
+
+    a
+}
+
+
+fn reduce_common_factor<T: CoordinateType+Div<Output=T>+Rem>(mut a: T, mut b: T) -> (T, T) {
+    let g = gcd(a, b);
+    (a/g, b/g)
+}
+
 
 #[derive(Debug)]
 pub struct Fraction<T: CoordinateType> {
@@ -8,8 +28,9 @@ pub struct Fraction<T: CoordinateType> {
     denominator: T,
 }
 
-impl<T: CoordinateType> Fraction<T> {
+impl<T: CoordinateType+Div<Output=T>+Rem> Fraction<T> {
     pub fn new(numerator: T, denominator: T) -> Self {
+        let (numerator, denominator) = reduce_common_factor(numerator, denominator);
         Fraction{ numerator, denominator }
     }
 
