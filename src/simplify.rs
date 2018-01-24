@@ -93,52 +93,90 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
     segments_to_look_at.push((0, initial_num_points-1));
 
     let e = epsilon as i64;
-    let e = Fraction::new(e*e, 1);
 
-    let mut dmax_sqr: Fraction<_> = Fraction::new(0, 1);
-    let mut distance_sqr: Fraction<_>;
     let mut index: usize;
+    let mut max_numerator;
+    let mut wipe_segment;
 
     loop {
         let (start_idx, end_idx) = match segments_to_look_at.pop() {
             None => { break; },
             Some(x) => x,
         };
-        println!("{} L {} segments.len() {} start {} end {}", file!(), line!(), segments_to_look_at.len(), start_idx, end_idx);
         // There should not be a case where start/end has been 'removed'
         debug_assert!(points_to_keep[start_idx]);
         debug_assert!(points_to_keep[end_idx]);
 
-        if start_idx + 1 == end_idx {
+        if start_idx + 1 == end_idx || start_idx == end_idx {
             continue;
         }
-        assert!(start_idx+1 != end_idx);
-        
+        debug_assert!(start_idx+1 != end_idx);
+        debug_assert!(start_idx < end_idx);
+
         index = start_idx;
-        dmax_sqr = Fraction::new(0, 1);
+        max_numerator = 0;
+        wipe_segment = false;
 
-        for (i, point) in points[start_idx+1..end_idx].iter().enumerate() {
-            if points_to_keep[i+start_idx] {
-                distance_sqr = point_line_distance_sqr(&point,
-                                               &points[start_idx],
-                                               &points[end_idx]);
+        let point1 = points[start_idx];
+        let point2 = points[end_idx];
+        if point1 == point2 {
+            // they're the same, so just look at the distance from point to all the other points
+            for (i, point) in points[start_idx+1..end_idx].iter().enumerate() {
+                if points_to_keep[i+start_idx] {
+                    let numerator = (point.x() as i64 - point1.x() as i64).pow(2) + (point.y() as i64 - point2.y() as i64).pow(2);
 
-                println!("{} L {} i {}\ndistance_sqr {:?} dmax_sqr {:?}\npoint {:?}\npoint[start_idx] {:?} point[end_idx] {:?}\n", file!(), line!(), i, distance_sqr, dmax_sqr, point, points[start_idx], points[end_idx]);
-                if distance_sqr > dmax_sqr {
-                    index = i+start_idx+1;
-                    dmax_sqr = distance_sqr;
-                    //println!("{} L {} Set dmax_sqr = {:?}", file!(), line!(), dmax_sqr);
+                    if numerator > max_numerator {
+                        index = i+start_idx+1;
+                        max_numerator = numerator;
+                    }
                 }
             }
+            // In this case, the numerator is the distance from the furthest point to the original
+            // point, squared. i.e. numerator = distance². So we only need to compare it with e².
+            let this_e = e.pow(2);
+            wipe_segment = max_numerator > this_e;
+        } else {
+            let delta_x = point2.x() as i64 - point1.x() as i64;
+            let delta_y = point2.y() as i64 - point1.y() as i64;
+            let end_x_start_y = point2.x() as i64*point1.y() as i64;
+            let end_y_start_x = point2.y() as i64*point1.x() as i64;
+        
+            let mut point_distance_sqr = delta_x.pow(2) + delta_y.pow(2);
+            debug_assert!(point_distance_sqr > 0);
+            
+
+            for (i, point) in points[start_idx+1..end_idx].iter().enumerate() {
+                if points_to_keep[i+start_idx] {
+                    let ac: i64 = delta_y*(point.x() as i64) + end_x_start_y;
+                    let bd: i64 = delta_x*(point.y() as i64) + end_y_start_x;
+                    let numerator = if ac > bd { ac - bd } else { bd - ac };
+
+                    if numerator > max_numerator {
+                        index = i+start_idx+1;
+                        max_numerator = numerator;
+                    }
+                }
+            }
+            assert!(e > 0);
+            assert!(max_numerator > 0);
+            // max_numerator is the max numerator
+            // We want to know if numerator/distance > e
+            // distance = sqrt(point_distance_sqr)
+            // numerator/sqrt(point_distance_sqr) > e
+            // numerator²/point_distance_sqr > e²
+            // numerator² > e²*point_distance_sqr
+            let this_e = e.pow(2)*point_distance_sqr;
+            wipe_segment = max_numerator > this_e;
         }
 
-        if dmax_sqr > e {
-            segments_to_look_at.push((start_idx, index));
-            segments_to_look_at.push((index, end_idx));
-        } else {
+
+        if wipe_segment {
             for flag in points_to_keep[start_idx+1..end_idx].iter_mut() {
                 *flag = false;
             }
+        } else {
+            segments_to_look_at.push((start_idx, index));
+            segments_to_look_at.push((index, end_idx));
         }
     }
     //println!("{} L {}", file!(), line!());
