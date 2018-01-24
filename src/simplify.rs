@@ -80,7 +80,7 @@ fn point_line_distance_sqr(point: &Point<i32>, start: &Point<i32>, end: &Point<i
 
 // Ramer-Douglas-Peucker line simplification algorithm
 fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
-    println!("{} L {}", file!(), line!());
+    //println!("{} L {}", file!(), line!());
     let initial_num_points = points.len();
     if initial_num_points <= 2 {
         return points;
@@ -164,7 +164,7 @@ pub fn simplify(geom: Geometry<i32>, epsilon: i32) -> Option<Geometry<i32>> {
 }
 
 fn simplify_linestring(geom: LineString<i32>, epsilon: i32, should_be_ring: bool) -> Option<LineString<i32>> {
-    println!("{} L {}", file!(), line!());
+    //println!("{} L {}", file!(), line!());
     let LineString(points) = geom;
     let new_points = rdp(points, epsilon);
 
