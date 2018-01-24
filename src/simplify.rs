@@ -1,15 +1,35 @@
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::ops::{DivAssign,Rem,Mul,AddAssign};
 
 use fraction::Fraction;
 
 use geo::*;
 
+/// We have a fraction a²/b², but we currently only have a & b². We want to reduce this fraction by
+/// removing common multiples so that the fraction is the. It returns the new (a, b²).
+/// The results of this will be used later to make the fraction when we calculate a², and we want
+/// to reduce the chance of overflow
+fn reduce_fraction_sqr(mut a: i64, mut b2: i64) -> (i64, i64) {
+    let primes = vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
+    'outer: loop {
+        for prime in primes.iter() {
+            if a % prime == 0 && b2 % prime*prime == 0 {
+                a  /= prime;
+                b2 /= prime*prime;
+                continue 'outer;
+            }
+        }
+
+        // Got to here => no primes used. so break out.
+        break;
+    }
+    (a, b2)
+}
+
 fn distance_sqr(a: &Point<i32>, b: &Point<i32>) -> i64 {
-    let delta_x = (a.x() - b.x()).abs();
-    let delta_y = (a.y() - b.y()).abs();
-    let delta_x = delta_x as i64;
-    let delta_y = delta_y as i64;
+    let delta_x = (a.x() as i64 - b.x() as i64).abs();
+    let delta_y = (a.y() as i64 - b.y() as i64).abs();
     assert!(delta_x >= 0);
     assert!(delta_y >= 0);
 
@@ -22,22 +42,6 @@ fn point_line_distance_sqr(point: &Point<i32>, start: &Point<i32>, end: &Point<i
     if start == end {
         Fraction::new(distance_sqr(point, start), 1)
     } else {
-        let start_x = start.y() as i64;
-        let start_y = start.y() as i64;
-        let end_x = end.y() as i64;
-        let end_y = end.y() as i64;
-        let point_x = point.x() as i64;
-        let point_y = point.y() as i64;
-        // point = (x0, y0)
-        // |(y2 - y1)x0 - (x2 - x1)y0 + x2y1 - y2x1|
-        // |a - b + c - d|
-        // |a+c - (b+d)|
-        // which we turn into a + c compared with b+d to get the diff
-        let ac = (end_y - start_y)*point_x + end_x*start_y;
-        let bd = (end_x - start_x)*point_y + end_y*start_x;
-        let numerator = if ac > bd { ac - bd } else { bd - ac };
-        let numerator = numerator*numerator;
-
         let denominator = distance_sqr(start, end);
         assert!(denominator != 0);
         if denominator < 0 {
@@ -48,13 +52,35 @@ fn point_line_distance_sqr(point: &Point<i32>, start: &Point<i32>, end: &Point<i
 
         assert!(denominator > 0);
 
+        let start_x = start.y() as i64;
+        let start_y = start.y() as i64;
+        let end_x = end.y() as i64;
+        let end_y = end.y() as i64;
+        let point_x = point.x() as i64;
+        let point_y = point.y() as i64;
+        // point = (x0, y0)
+        // |(y2 - y1)x0 - (x2 - x1)y0 + x2y1 - y2x1|
+        // |a - b + c - d|
+        // |a+c - (b+d)|
+        // which we turn into a+c compared with b+d to get the diff
+        let ac: i64 = (end_y - start_y)*point_x + end_x*start_y;
+        let bd: i64 = (end_x - start_x)*point_y + end_y*start_x;
+        let numerator: i64 = if ac > bd { ac - bd } else { bd - ac };
+
+        //println!("{} L {} numerator {} denominator {}", file!(), line!(), numerator, denominator);
+        let (numerator, denominator) = reduce_fraction_sqr(numerator, denominator);
+        //println!("{} L {} numerator {} denominator {}", file!(), line!(), numerator, denominator);
+
+        assert!(numerator.checked_mul(numerator).is_some(), "{} L {}\npoint {:?} start {:?} end {:?}\nnumerator {:?}\nac {:?} bd {:?}", file!(), line!(), point, start, end, numerator, ac, bd);
+        let numerator = numerator*numerator;
+
         Fraction::new(numerator, denominator)
     }
 }
 
 // Ramer-Douglas-Peucker line simplification algorithm
-fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>>
-{
+fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
+    println!("{} L {}", file!(), line!());
     let initial_num_points = points.len();
     if points.is_empty() || initial_num_points <= 2 {
         return points;
@@ -69,8 +95,8 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>>
     let e = epsilon as i64;
     let e = Fraction::new(e*e, 1);
 
-    let mut dmax_sqr: Fraction<i64> = Fraction::new(0, 1);
-    let mut distance_sqr: Fraction<i64>;
+    let mut dmax_sqr: Fraction<_> = Fraction::new(0, 1);
+    let mut distance_sqr: Fraction<_>;
     let mut index: usize;
 
     loop {
@@ -78,6 +104,10 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>>
             None => { break; },
             Some(x) => x,
         };
+        println!("{} L {} segments.len() {} start {} end {}", file!(), line!(), segments_to_look_at.len(), start_idx, end_idx);
+        // There should not be a case where start/end has been 'removed'
+        debug_assert!(points_to_keep[start_idx]);
+        debug_assert!(points_to_keep[end_idx]);
 
         if start_idx + 1 == end_idx {
             continue;
@@ -92,12 +122,16 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>>
                 distance_sqr = point_line_distance_sqr(&point,
                                                &points[start_idx],
                                                &points[end_idx]);
+
+                println!("{} L {} i {}\ndistance_sqr {:?} dmax_sqr {:?}\npoint {:?}\npoint[start_idx] {:?} point[end_idx] {:?}\n", file!(), line!(), i, distance_sqr, dmax_sqr, point, points[start_idx], points[end_idx]);
                 if distance_sqr > dmax_sqr {
                     index = i+start_idx+1;
                     dmax_sqr = distance_sqr;
+                    //println!("{} L {} Set dmax_sqr = {:?}", file!(), line!(), dmax_sqr);
                 }
             }
         }
+
         if dmax_sqr > e {
             segments_to_look_at.push((start_idx, index));
             segments_to_look_at.push((index, end_idx));
@@ -107,6 +141,7 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>>
             }
         }
     }
+    //println!("{} L {}", file!(), line!());
 
     let new_points: Vec<_> = points.drain(..).zip(points_to_keep.into_iter()).filter_map(|(point, keep)| if keep { Some(point) } else { None }).collect();
 
@@ -129,6 +164,7 @@ pub fn simplify(geom: Geometry<i32>, epsilon: i32) -> Option<Geometry<i32>> {
 }
 
 fn simplify_linestring(geom: LineString<i32>, epsilon: i32, should_be_ring: bool) -> Option<LineString<i32>> {
+    println!("{} L {}", file!(), line!());
     let LineString(points) = geom;
     let new_points = rdp(points, epsilon);
 
@@ -171,7 +207,7 @@ fn simplify_multipolygon(geom: MultiPolygon<i32>, epsilon: i32) -> Option<MultiP
     }
 }
 
-pub fn remove_unneeded_points<T: CoordinateType+Debug>(mut geom: &mut Geometry<T>) {
+pub fn remove_unneeded_points(mut geom: &mut Geometry<i32>) {
     remove_points_in_line(&mut geom);
     remove_duplicate_points(&mut geom);
     remove_spikes(&mut geom);
@@ -182,7 +218,7 @@ pub fn remove_unneeded_points<T: CoordinateType+Debug>(mut geom: &mut Geometry<T
 /// remove the intermediate points.
 /// This is faster than a real simplification, and reduces the number of points, which makes
 /// actual simplification faster.
-pub fn remove_points_in_line<T: CoordinateType+Debug>(geom: &mut Geometry<T>) {
+pub fn remove_points_in_line(geom: &mut Geometry<i32>) {
     match *geom {
         Geometry::LineString(ref mut ls) => remove_points_in_line_linestring(ls),
         Geometry::MultiLineString(ref mut mls) => {
@@ -208,7 +244,7 @@ pub fn remove_points_in_line<T: CoordinateType+Debug>(geom: &mut Geometry<T>) {
     }
 }
 
-fn remove_points_in_line_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
+fn remove_points_in_line_linestring(ls: &mut LineString<i32>) {
     if ls.0.len() < 2 {
         return;
     }
@@ -242,7 +278,7 @@ fn remove_points_in_line_linestring<T: CoordinateType+Debug>(ls: &mut LineString
         return;
     }
 
-    let new_points: Vec<Point<T>> = ls.0.drain(..).zip(keeps.into_iter()).filter_map(|(point, keep)| if keep { Some(point) } else { None }).collect();
+    let new_points: Vec<Point<_>> = ls.0.drain(..).zip(keeps.into_iter()).filter_map(|(point, keep)| if keep { Some(point) } else { None }).collect();
 
     ::std::mem::replace(&mut ls.0, new_points);
 }
@@ -405,5 +441,15 @@ mod test {
         assert!(is_valid(&geom), "Invalid geometry {:?}", geom);
     }
 
+    #[test]
+    fn reduce_fraction_sqr1() {
+        assert_eq!(reduce_fraction_sqr(0, 1), (0, 1));
+        assert_eq!(reduce_fraction_sqr(2, 10*10), (1, 5*5));
+        assert_eq!(reduce_fraction_sqr(2, 5*5), (2, 5*5));
+        assert_eq!(reduce_fraction_sqr(4, 20*20), (1, 5*5));
+
+        assert_eq!(reduce_fraction_sqr(3, 15*15), (1, 5*5));
+        assert_eq!(reduce_fraction_sqr(6, 30*30), (1, 5*5));
+    }
 
 }

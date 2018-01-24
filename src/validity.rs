@@ -2,7 +2,7 @@ use geo::*;
 use geo::map_coords::MapCoords;
 use geo::intersects::Intersects;
 use std::cmp::{min, max, Ord, Ordering};
-use std::ops::{Add, Sub};
+use std::ops::{Add, Sub, DivAssign,Rem,Mul,AddAssign};
 use std::collections::HashMap;
 use num_traits::Signed;
 use std::fmt::Debug;
@@ -436,12 +436,14 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
     unreachable!();
 }
 
-pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut geom: Geometry<T>) -> Geometry<T> {
-    simplify::remove_unneeded_points(&mut geom);
+pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash+DivAssign+Rem+AddAssign>(mut geom: Geometry<T>) -> Geometry<T> {
+    //println!("{} L {}", file!(), line!());
+    //simplify::remove_unneeded_points(&mut geom);
     if is_valid(&geom) {
         return geom;
     }
 
+    //println!("{} L {}", file!(), line!());
     match geom {
         Geometry::Polygon(p) => Geometry::MultiPolygon(make_polygon_valid(p)),
         Geometry::MultiPolygon(mp) => Geometry::MultiPolygon(make_multipolygon_valid(mp)),
@@ -450,6 +452,7 @@ pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut geom: Geometry<T>
 }
 
 fn make_multipolygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut mp: MultiPolygon<T>) -> MultiPolygon<T> {
+    //println!("{} L {}", file!(), line!());
     let MultiPolygon( polygons ) = mp;
 
     let rings: Vec<LineString<T>> = polygons.into_iter().flat_map(|p| {
@@ -464,6 +467,7 @@ fn make_multipolygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut mp: Mult
 }
 
 fn make_polygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut p: Polygon<T>) -> MultiPolygon<T> {
+    //println!("{} L {}", file!(), line!());
     let Polygon{ exterior, interiors } = p;
     let mut rings = interiors;
     rings.insert(0, exterior);
@@ -473,15 +477,20 @@ fn make_polygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut p: Polygon<T>
 }
 
 fn make_rings_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut rings: Vec<LineString<T>>) -> MultiPolygon<T> {
+    //println!("{} L {}", file!(), line!());
 
     let mut new_rings: Vec<LineString<T>> = Vec::with_capacity(rings.len());
     for mut ring in rings.into_iter() {
+        //println!("{} L {}", file!(), line!());
         add_points_for_all_crossings(&mut ring);
+        //println!("{} L {}", file!(), line!());
         let mut these_rings = dissolve_into_rings(ring);
         new_rings.append(&mut these_rings);
     }
+    //println!("{} L {}", file!(), line!());
 
     let rings = new_rings;
+    //println!("{} L {}", file!(), line!());
     
     let result = convert_rings_to_polygons(rings);
 
@@ -489,6 +498,7 @@ fn make_rings_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut rings: Vec<Line
     let mut result = Geometry::MultiPolygon(result);
     ensure_polygon_orientation(&mut result);
 
+    //println!("{} L {}", file!(), line!());
     if let Geometry::MultiPolygon(mp) = result {
         return mp;
     } else {
@@ -505,8 +515,10 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
         return;
     }
     //println!("\n\nXXX\nls {:?}\n", ls);
+    //println!("{} L {}", file!(), line!());
 
     loop {
+        //println!("{} L {}", file!(), line!());
         //println!("\nStart of loop\n{:?}", ls.0);
         let mut coords_to_insert = HashMap::new();
         // Keys are the point indexes.
@@ -516,6 +528,7 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
         // afterwards
 
         for (i, points12) in ls.0.windows(2).enumerate() {
+            //println!("{} L {}", file!(), line!());
             let (p1, p2) = (points12[0], points12[1]);
             
             for (j, points34) in ls.0[i+1..].windows(2).enumerate().take(ls.0.len()-i-1) {
@@ -600,9 +613,11 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
         }
 
 
+        //println!("{} L {}", file!(), line!());
         if coords_to_insert.is_empty() {
             break;
         } else {
+            //println!("{} L {}", file!(), line!());
             // When we insert a point into the vec, it'll push all after that along. Keep track of
             // how many we've inserted.
             let mut offset = 0;
@@ -632,10 +647,12 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     offset += 1;
                 }
             }
+            //println!("{} L {}", file!(), line!());
 
             //println!("We added {} new points to the line", offset);
         }
     }
+    //println!("{} L {}", file!(), line!());
 
     //println!("finished");
 
@@ -1020,12 +1037,17 @@ fn order_points<T: CoordinateType+Debug+Sub<Output=T>+Ord>(line: ((T, T), (T, T)
     } else {
         // this shouldn't happen
         // Probably happens when p1 and/or p2 aren't on the line
-        eprintln!("line {:?} p1 {:?} p2 {:?}", line, p1, p2);
-        eprintln!("slone_line {:?}", slope_line);
-        eprintln!("slope_start_1 {:?} slope_start_2 {:?}", slope_start_1, slope_start_2);
-        eprintln!("slope_1_2 {:?} slope_2_1 {:?}", slope_1_2, slope_2_1);
-        eprintln!("slope_2_end {:?}", slope_2_end);
-        unreachable!();
+
+        // Gonna presume they are equal, and if we do a stable sort then the order won't change
+        // TODO Should this be a PartialOrd instead?
+        Ordering::Equal
+
+        //eprintln!("line {:?} p1 {:?} p2 {:?}", line, p1, p2);
+        //eprintln!("slone_line {:?}", slope_line);
+        //eprintln!("slope_start_1 {:?} slope_start_2 {:?}", slope_start_1, slope_start_2);
+        //eprintln!("slope_1_2 {:?} slope_2_1 {:?}", slope_1_2, slope_2_1);
+        //eprintln!("slope_2_end {:?}", slope_2_end);
+        //unreachable!();
     }
 
 }

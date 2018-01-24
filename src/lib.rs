@@ -460,7 +460,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
         for (i, row) in res {
             num_objects += 1;
-
+            println!("{} L {}", file!(), line!());
 
             // First object is the ST_AsBinary
             // TODO Does this do any copies that we don't want?
@@ -521,6 +521,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // Only do the simplification if we're not at maxzoom. We've already removed extra
             //
             // points in remove_unneeded_points above
+            println!("{} L {}", file!(), line!());
             let geom = if metatile.zoom() < layers.global_maxzoom {
                     match simplify::simplify(geom, 8) {
                         None => { continue; },
@@ -530,6 +531,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
+            println!("{} L {}", file!(), line!());
             //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             
             // After simplifying a geometry, it's possible it becomes invalid. So we just skip the
@@ -549,7 +551,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             };
 
             //let geom = validity::make_valid(geom);
-            debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:?}", line!(), geom);
+            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:?}", line!(), geom);
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
@@ -592,9 +594,11 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             if bad_obj {
                 println!("\nL {} geom {:?}", line!(), geom);
             }
+            println!("{} L {}", file!(), line!());
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
                     Some(mut g) => {
+                        //println!("{} L {}", file!(), line!());
                         //debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
 
                         let mut g = validity::make_valid(g);
@@ -609,7 +613,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }).collect();
             geoms.reverse();
 
-
+            //println!("{} L {}", file!(), line!());
             let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>| {
 
                 let i = (tile.x() - metatile.x()) as i32;
@@ -617,7 +621,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
                 geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
 
-                debug_assert!(is_valid(&geom));
+                //debug_assert!(is_valid(&geom));
 
                 if bad_obj {
                     println!("\nL {} geom {:?}", line!(), geom);

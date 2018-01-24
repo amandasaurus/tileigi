@@ -52,8 +52,8 @@ pub fn printer(rx: Receiver<PrinterMessage>) {
         }
 
         let duration = duration_to_float_secs(&start.elapsed());
-        write!(stdout, "\r[{:>6}s] z{:>2}, {:4} metatile(s) ({:9.4} metatiles/s, {:9.4} tiles/s, {:5} tiles in last s)", start.elapsed().as_secs(), current_zoom, num_metatiles_done, (num_metatiles_done as f64)/duration, (num_tiles_done as f64)/duration, num_this_sec).ok();
-        stdout.flush().ok();
+        //write!(stdout, "\r[{:>6}s] z{:>2}, {:4} metatile(s) ({:9.4} metatiles/s, {:9.4} tiles/s, {:5} tiles in last s)", start.elapsed().as_secs(), current_zoom, num_metatiles_done, (num_metatiles_done as f64)/duration, (num_tiles_done as f64)/duration, num_this_sec).ok();
+        //stdout.flush().ok();
 
         if should_quit {
             break;
