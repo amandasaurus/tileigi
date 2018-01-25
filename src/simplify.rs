@@ -120,40 +120,50 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
         let point1 = points[start_idx];
         let point2 = points[end_idx];
         if point1 == point2 {
+            //println!("{}:{} points are the same", file!(), line!());
             // they're the same, so just look at the distance from point to all the other points
             for (i, point) in points[start_idx+1..end_idx].iter().enumerate() {
                 if points_to_keep[i+start_idx] {
                     let numerator = (point.x() as i64 - point1.x() as i64).pow(2) + (point.y() as i64 - point2.y() as i64).pow(2);
+                    //println!("{}:{} i {} numerator {} max_numerator {}", file!(), line!(), i, numerator, max_numerator);
 
                     if numerator > max_numerator {
                         index = i+start_idx+1;
                         max_numerator = numerator;
+                        //println!("{}:{} using this", file!(), line!());
                     }
                 }
             }
             // In this case, the numerator is the distance from the furthest point to the original
             // point, squared. i.e. numerator = distance². So we only need to compare it with e².
             let this_e = e.pow(2);
-            wipe_segment = max_numerator > this_e;
+            wipe_segment = max_numerator < this_e;
+            //println!("{}:{} max_numerator {} this_e {} wipe_segment {}", file!(), line!(), max_numerator, this_e, wipe_segment);
         } else {
+            //println!("{}:{} points are different", file!(), line!());
             let delta_x = point2.x() as i64 - point1.x() as i64;
             let delta_y = point2.y() as i64 - point1.y() as i64;
             let end_x_start_y = point2.x() as i64*point1.y() as i64;
             let end_y_start_x = point2.y() as i64*point1.x() as i64;
         
+            // the square of the distance between point1 and point2
             let mut point_distance_sqr = delta_x.pow(2) + delta_y.pow(2);
             debug_assert!(point_distance_sqr > 0);
+            //println!("{}:{} point_distance_sqr {:?}", file!(), line!(), point_distance_sqr);
             
 
             for (i, point) in points[start_idx+1..end_idx].iter().enumerate() {
                 if points_to_keep[i+start_idx] {
                     let ac: i64 = delta_y*(point.x() as i64) + end_x_start_y;
                     let bd: i64 = delta_x*(point.y() as i64) + end_y_start_x;
-                    let numerator = if ac > bd { ac - bd } else { bd - ac };
+                    let numerator = (ac - bd).abs();
+                    
+                    //println!("{}:{} i {} numerator {} max_numerator {}", file!(), line!(), i, numerator, max_numerator);
 
                     if numerator > max_numerator {
                         index = i+start_idx+1;
                         max_numerator = numerator;
+                        //println!("{}:{} using this", file!(), line!());
                     }
                 }
             }
@@ -166,11 +176,18 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
             // numerator²/point_distance_sqr > e²
             // numerator² > e²*point_distance_sqr
             let this_e = e.pow(2)*point_distance_sqr;
-            wipe_segment = max_numerator > this_e;
+            wipe_segment = max_numerator.pow(2) < this_e;
+            //println!("{}:{} max_numerator {} this_e {} wipe_segment {}", file!(), line!(), max_numerator, this_e, wipe_segment);
         }
 
 
         if wipe_segment {
+            if start_idx == 0 && end_idx == initial_num_points - 1 {
+                // The entire line should be simplified away, keeping only the start & end points.
+                // So short circuit that logic
+                return vec![point1, point2];
+            }
+
             for flag in points_to_keep[start_idx+1..end_idx].iter_mut() {
                 *flag = false;
             }

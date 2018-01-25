@@ -676,43 +676,60 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
         // rather than do a loop later
         outgoing_segments.entry((p.x(), p.y())).or_insert(vec![]).push(i);
     }
+    //println!("{}:{} outgoing_segments {:?}", file!(), line!(), outgoing_segments);
 
     // loops: a Vec of Vec's. Each inner vec is 2 point indexes, and means 'there is a loop from
     // this point to that point'
-    let mut loops = outgoing_segments.iter().filter(|&(_, v)| v.len() > 1).map(|(_, v)| v).collect::<Vec<_>>();
-    //println!("loops {:?}", loops);
+    let mut loops: Vec<Vec<usize>> = outgoing_segments.into_iter().filter_map(|(_, v)| if v.len() > 1 { Some(v) } else { None }).collect();
+    //println!("{}:{} ls {:?}", file!(), line!(), points);
+    //println!("{}:{} loops {:?}", file!(), line!(), loops);
+
+    // If the linestring touches the first/last point, then this algoritm will result in a loop
+    // with 3 numbers, [0, touching point idx, last]. Make this into 2 loops
+    //
+    // This is a list of indices in loops where these problems occur
+    let mut loop_with_3_points = loops.iter().enumerate()
+            .filter_map(|(i, l)| if l.len() == 3 && l[0] == 0 && l[2] == points.len()-1 { Some(i) } else { None })
+            .collect::<Vec<usize>>();
+    // 0 = nothing is strange, 1 = simple case of first/last point being 'touched'. >1 who knows?
+    assert!(loop_with_3_points.len() == 0 || loop_with_3_points.len() == 1);
+    if loop_with_3_points.len() == 1 {
+        let single_loop = loops.swap_remove(loop_with_3_points.remove(0));
+        loops.push(vec![single_loop[0], single_loop[1]]);
+        loops.push(vec![single_loop[1], single_loop[2]]);
+    }
 
     if loops.len() == 1 {
         if loops[0].len() == 2 && loops[0][0] == 0 && loops[0][1] == points.len()-1 {
-            // start & end
+            // start & end the same, ergo only one loop here
             return vec![LineString(points)];
         } else {
-            return Vec::new();
+            //return Vec::new();
             // FIXME do something here
             // There is only one loop, and it is not a simple outer loop.
             //eprintln!("outgoing_segments {:?}", outgoing_segments);
-            ////eprintln!("points {:?}", points);
-            //eprintln!("loops {:?}", loops);
-            //for (i, p) in points.iter().enumerate() {
-            //    eprintln!("{:03} {:?},{:?}", i, p.x(), p.y());
-            //}
-            //unreachable!();
+            eprintln!("points {:?}", points);
+            eprintln!("loops {:?}", loops);
+            for (i, p) in points.iter().enumerate() {
+                eprintln!("{:03} {:?},{:?}", i, p.x(), p.y());
+            }
+            unreachable!();
         }
     }
 
     let mut point_unassigned = vec![true; points.len()];
     let mut results: Vec<LineString<T>> = vec![];
 
-    // Remove weird loops.
-    // This is not ideal, but it seems to make valid geometries for MbSC
-    let mut loops = loops.into_iter().filter(|idxes| idxes.len() == 2).collect::<Vec<_>>();
 
+    debug_assert!(loops.iter().all(|idxes| idxes.len() == 2), "There is a point with != 2 segments: {:?}\npoints: {:?}", loops, points);
     if loops.iter().any(|idxes| idxes.len() != 2) {
-        eprintln!("L {} loops {:?}", line!(), loops);
+        //eprintln!("{} {} loops {:?}", file!(), line!(), loops);
         // FIXME do something here
         return vec![];
     }
-    debug_assert!(loops.iter().all(|idxes| idxes.len() == 2), "There is a point with != 2 segments: {:?}\npoints: {:?}", loops, points);
+    // Remove weird loops.
+    // This is not ideal, but it seems to make valid geometries for MbSC
+    //let mut loops = loops.into_iter().filter(|idxes| idxes.len() == 2).collect::<Vec<_>>();
 
     //println!("points {:?}", points);
     //println!("outgoing_segments {:?}", outgoing_segments);
@@ -722,7 +739,7 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
     // on, this sort-by-length should do it (since an outer loop will be longer than the inner one
     // it contains)
     loops.sort_by_key(|i| (i[1]-i[0], i[0]));
-    //println!("loops {:?}", loops);
+    //println!("{}:{} loops {:?}", file!(), line!(), loops);
 
     for loop_indexes in loops {
         assert!(loop_indexes.len() == 2);
@@ -764,11 +781,11 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
         }
     }
 
-    //println!("point_unassigned {:?}", point_unassigned);
+    //println!("{}:{} point_unassigned {:?}", file!(), line!(), point_unassigned);
     // There will always be the last/first point unassigned since we keep the end around, which
     // means the endpoint of the outer ring is kept. So they should all be false, except the last
     // which is true
-    debug_assert!(point_unassigned.iter().take(point_unassigned.len()-1).all(|x| !x));
+    debug_assert!(point_unassigned.iter().take(point_unassigned.len()-1).all(|x| !x), "{:?}", point_unassigned);
     debug_assert!(point_unassigned[point_unassigned.len()-1]);
 
     results
@@ -941,34 +958,35 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
     return MultiPolygon(vec![Polygon::new(ring, vec![])]);
 
     
+    // FIXME implement this
     // All interiors?!
-    assert!(!(exteriors.is_empty() && !interiors.is_empty()), "convert_rings_to_polygons {}\ninteriors {:?}\nexteriors {:?}\nno exteriors, but interiors", line!(), interiors, exteriors);
+    //assert!(!(exteriors.is_empty() && !interiors.is_empty()), "convert_rings_to_polygons {}\ninteriors {:?}\nexteriors {:?}\nno exteriors, but interiors", line!(), interiors, exteriors);
 
-    let mut polygons: Vec<_> = exteriors.into_iter().map(|p| Polygon::new(p, vec![])).collect();
+    //let mut polygons: Vec<_> = exteriors.into_iter().map(|p| Polygon::new(p, vec![])).collect();
 
-    // we need to calculate the what exterior that each interior is in
-    
-    if polygons.len() == 1 {
-        // There is only one exterior ring, so take a simple approach of assuming all the
-        // interiors are part of that
-        ::std::mem::swap(&mut polygons[0].interiors, &mut interiors);
-        
-    } else {
-        if interiors.is_empty() {
-            // nothing to do
-        } else {
-            // we need to figure out which exterior each interior is in.
-            //eprintln!("polygons {:?}", polygons);
-            //eprintln!("interiors {:?}", interiors);
-            //unimplemented!()
+    //// we need to calculate the what exterior that each interior is in
+    //
+    //if polygons.len() == 1 {
+    //    // There is only one exterior ring, so take a simple approach of assuming all the
+    //    // interiors are part of that
+    //    ::std::mem::swap(&mut polygons[0].interiors, &mut interiors);
+    //    
+    //} else {
+    //    if interiors.is_empty() {
+    //        // nothing to do
+    //    } else {
+    //        // we need to figure out which exterior each interior is in.
+    //        //eprintln!("polygons {:?}", polygons);
+    //        //eprintln!("interiors {:?}", interiors);
+    //        //unimplemented!()
 
-            // Just skip it for now
-            // FIXME implement this
-        }
-    }
+    //        // Just skip it for now
+    //        // FIXME implement this
+    //    }
+    //}
 
 
-    MultiPolygon(polygons)
+    //MultiPolygon(polygons)
 }
 
 /// Given a line defined by 2 points, and 2 other points (p1 & p2) which were assume are on the
@@ -1492,6 +1510,55 @@ mod test {
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], vec![f, g, h, i, j, f].into());
         assert_eq!(result[1], vec![a, b, c, d, e, a].into());
+    }
+
+    #[test]
+    fn dissolve_into_rings5() {
+        // This is a complicated real world example.
+        let ls = LineString(vec![
+            Point::new(31071, 21260),
+            Point::new(31071, 21259),
+            Point::new(31071, 21258),
+            Point::new(31072, 21258),
+            Point::new(31072, 21259),
+            Point::new(31071, 21259),
+            Point::new(31071, 21260),
+            Point::new(31072, 21260),
+            Point::new(31072, 21262),
+            Point::new(31073, 21262),
+            Point::new(31073, 21264),
+            Point::new(31074, 21264),
+            Point::new(31074, 21265),
+            Point::new(31073, 21265),
+            Point::new(31073, 21264),
+            Point::new(31072, 21264),
+            Point::new(31072, 21262),
+            Point::new(31071, 21262),
+            Point::new(31071, 21260)]);
+
+        let result = dissolve_into_rings(ls);
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0], LineString(vec![Point::new(31071, 21259), Point::new(31071, 21258), Point::new(31072, 21258), Point::new(31072, 21259), Point::new(31071, 21259)]));
+        assert_eq!(result[1], LineString(vec![Point::new(31073, 21264), Point::new(31074, 21264), Point::new(31074, 21265), Point::new(31073, 21265), Point::new(31073, 21264)]));
+        assert_eq!(result[2], LineString(vec![Point::new(31072, 21262), Point::new(31073, 21262), Point::new(31073, 21264), Point::new(31072, 21264), Point::new(31072, 21262)]));
+        assert_eq!(result[3], LineString(vec![Point::new(31071, 21260), Point::new(31072, 21260), Point::new(31072, 21262), Point::new(31071, 21262), Point::new(31071, 21260)]));
+    }
+
+    #[test]
+    fn dissolve_into_rings6() {
+        // b--c
+        // | /
+        // a
+        // | \
+        // e--d
+        let b = Point::new(0, 0); let c = Point::new(5, 0);
+        let a = Point::new(0, 5);
+        let e = Point::new(0, 10); let d = Point::new(5, 10);
+        let ls: LineString<_> = vec![a, b, c, a, d, e, a].into();
+        let result = dissolve_into_rings(ls);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], vec![a, b, c, a].into());
+        assert_eq!(result[1], vec![a, d, e, a].into());
     }
 
     #[test]
