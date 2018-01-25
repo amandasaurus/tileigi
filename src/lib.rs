@@ -460,7 +460,6 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
         for (i, row) in res {
             num_objects += 1;
-            //println!("{} L {}", file!(), line!());
 
             // First object is the ST_AsBinary
             // TODO Does this do any copies that we don't want?
@@ -471,7 +470,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             let geom: geo::Geometry<f64> = match wkb::wkb_to_geom(&mut wkb_bytes.as_slice()) {
                 Err(e) => {
                     // TODO investigate this more
-                    eprintln!("Metatile: {:?} WKB reading error {:?}, first few bytes geom: {:?}", metatile, e, wkb_bytes.into_iter().take(20).collect::<Vec<u8>>());
+                    //eprintln!("{}:{} Metatile: {:?} WKB reading error {:?}, layer {} row {:?}", file!(), line!(), metatile, e, layer_name, row);
                     continue;
                 },
                 Ok(g) => g,
@@ -489,10 +488,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // TODO there are a lot of calls to `is_valid`, which is computationally expensive, but
             // removing them makes it slower, probably because of the lots of invalid geoms
 
-            if bad_obj {
-                println!("\nL {} geom {:?}", line!(), geom);
-                println!("\nL {} minx {} maxx {} miny {} maxy {} extent {}", line!(), minx, maxx, miny, maxy, extent);
-            }
+            //if bad_obj {
+            //    println!("\nL {} geom {:?}", line!(), geom);
+            //    println!("\nL {} minx {} maxx {} miny {} maxy {} extent {}", line!(), minx, maxx, miny, maxy, extent);
+            //}
             let mut geom = remap_geometry(geom, minx, maxx, miny, maxy, extent);
             if geom.is_none() {
                 if bad_obj {
@@ -511,7 +510,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
             if bad_obj {
-                println!("\nL {} geom {:?}", line!(), geom);
+                println!("{}:{} geom {:?}", file!(), line!(), geom);
             }
             //validity::ensure_polygon_orientation(&mut geom);
             //if ! is_valid_skip_expensive(&geom) {
@@ -524,12 +523,17 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             //println!("{} L {}", file!(), line!());
             let geom = if metatile.zoom() < layers.global_maxzoom {
                     match simplify::simplify(geom, 8) {
-                        None => { continue; },
+                        None => {
+                            if bad_obj {
+                                println!("{}:{} none after simplify", file!(), line!());
+                            }
+                            continue;
+                        },
                         Some(g) => g,
                     }
             } else { geom };
             if bad_obj {
-                println!("\nL {} geom {:?}", line!(), geom);
+                println!("L {} geom {:?}", line!(), geom);
             }
             //println!("{} L {}", file!(), line!());
             //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);

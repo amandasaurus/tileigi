@@ -23,9 +23,8 @@ pub enum FileIOMessage {
 
 pub fn fileio_thread<D: TileDestination+Sized>(rx: Receiver<FileIOMessage>, mut dest: Box<D>)
 {
-    let mut should_quit = false;
-
     for msg in rx.iter() {
+        //println!("{}:{} msg {:?}", file!(), line!(), msg);
         match msg {
             FileIOMessage::Quit => { break; },
             FileIOMessage::SaveTile(tile, bytes) => {
@@ -83,7 +82,8 @@ impl MBTiles {
 
 impl TileDestination for MBTiles {
     fn save_tile(&mut self, tile: slippy_map_tiles::Tile, bytes: Vec<u8>) {
-        let digest = format!("{:x}", md5::compute(&bytes));
+        //let digest = format!("{:x}", md5::compute(&bytes));
+        let digest = format!("{}/{}/{}", tile.zoom(), tile.x(), tile.y());
         self.conn.execute(
             "INSERT INTO map (zoom_level, tile_column, tile_row, tile_id) VALUES (?1, ?2, ?3, ?4);",
             &[&tile.zoom(), &tile.x(), &tile.y(), &digest]

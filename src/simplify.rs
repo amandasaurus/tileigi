@@ -99,6 +99,7 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
     let mut wipe_segment;
 
     loop {
+        //println!("{}:{} segments_to_look_at.len() {}, segments_to_look_at {:?}", file!(), line!(), segments_to_look_at.len(), segments_to_look_at);
         let (start_idx, end_idx) = match segments_to_look_at.pop() {
             None => { break; },
             Some(x) => x,
