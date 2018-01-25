@@ -87,7 +87,6 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
     }
 
     let mut points_to_keep: Vec<bool> = vec![true; points.len()];
-    let mut num_points_to_keep = points.len();
     let mut segments_to_look_at: Vec<(usize, usize)> = vec![];
 
     segments_to_look_at.push((0, initial_num_points-1));
@@ -95,7 +94,6 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
     let e = (epsilon as i64).pow(2);
 
     let mut index: usize;
-    let mut max_numerator;
     let mut wipe_segment;
 
     loop {
@@ -114,12 +112,11 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
         debug_assert!(start_idx+1 != end_idx);
         debug_assert!(start_idx < end_idx);
 
-        index = start_idx;
-        max_numerator = 0;
         wipe_segment = false;
 
         let point1 = points[start_idx];
         let point2 = points[end_idx];
+
         if point1 == point2 {
             //println!("{}:{} points are the same", file!(), line!());
             // they're the same, so just look at the distance from point to all the other points
@@ -132,6 +129,7 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
                 .unwrap();
 
             index = this_index+start_idx+1;
+            debug_assert!(max_numerator > 0);
 
             // In this case, the numerator is the distance from the furthest point to the original
             // point, squared. i.e. numerator = distance². So we only need to compare it with e².
@@ -161,8 +159,7 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
 
             index = this_index+start_idx+1;
 
-            assert!(e > 0);
-            assert!(max_numerator > 0);
+            debug_assert!(max_numerator > 0);
             // max_numerator is the max numerator
             // We want to know if numerator/distance > epsilon
             // distance = sqrt(point_distance_sqr)
@@ -412,31 +409,31 @@ fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
         // keep_point[i] = true means we should keep this point. false means remove it.
         let mut keep_point = vec![true; ls.0.len()];
         let mut i = 1;
-        let mut points_removed = 0;
+        let mut have_removed_points = false;
 
-        loop {
-            if i >= (ls.0.len() - 1) {
-                break;
-            }
+        for (i, points) in ls.0.windows(3).enumerate() {
+            let p1 = points[0];
+            let p2 = points[1];
+            let p3 = points[2];
 
-            let p1 = ls.0[i-1];
-            let p2 = ls.0[i];
-            let p3 = ls.0[i+1];
             // This algorithm is 'twice the triangle area'. If it's 0 (i.e. both sides are equal),
             // then it's a zero area, i.e. spike.
             if (p1.x() - p3.x())*(p2.y() - p1.y()) == (p1.x() - p2.x())*(p3.y() - p1.y()) {
-                keep_point[i] = false;
-                points_removed += 1;
+                // i is the index of the first point, but it's really the middle we want to
+                // change
+                keep_point[i+1] = false;
+                have_removed_points = true;
             }
-            i += 1;
         }
 
-        if points_removed > 0 {
+
+        if have_removed_points {
             // Create a new vec of points but only the ones we want to keep
             let new_points: Vec<Point<T>> = ls.0.drain(..).zip(keep_point.into_iter()).filter_map(|(p, keep)| if keep { Some(p) } else { None }).collect();
             
             // and move that in for the points
             ::std::mem::replace(&mut ls.0, new_points);
+
             continue;
         } else {
             break;
