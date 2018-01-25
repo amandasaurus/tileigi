@@ -193,8 +193,13 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
                 *flag = false;
             }
         } else {
-            segments_to_look_at.push((start_idx, index));
-            segments_to_look_at.push((index, end_idx));
+            // Don't add segments which we won't use and just skip later.
+            if start_idx + 1 != index && start_idx != end_idx {
+                segments_to_look_at.push((start_idx, index));
+            }
+            if index + 1 != end_idx && index != end_idx {
+                segments_to_look_at.push((index, end_idx));
+            }
         }
     }
     //println!("{} L {}", file!(), line!());
