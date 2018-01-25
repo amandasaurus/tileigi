@@ -92,7 +92,7 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
 
     segments_to_look_at.push((0, initial_num_points-1));
 
-    let e = epsilon as i64;
+    let e = (epsilon as i64).pow(2);
 
     let mut index: usize;
     let mut max_numerator;
@@ -137,7 +137,6 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
             }
             // In this case, the numerator is the distance from the furthest point to the original
             // point, squared. i.e. numerator = distance². So we only need to compare it with e².
-            let this_e = e.pow(2);
             wipe_segment = max_numerator < this_e;
             //println!("{}:{} max_numerator {} this_e {} wipe_segment {}", file!(), line!(), max_numerator, this_e, wipe_segment);
         } else {
@@ -171,12 +170,12 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
             assert!(e > 0);
             assert!(max_numerator > 0);
             // max_numerator is the max numerator
-            // We want to know if numerator/distance > e
+            // We want to know if numerator/distance > epsilon
             // distance = sqrt(point_distance_sqr)
-            // numerator/sqrt(point_distance_sqr) > e
-            // numerator²/point_distance_sqr > e²
-            // numerator² > e²*point_distance_sqr
-            let this_e = e.pow(2)*point_distance_sqr;
+            // numerator/sqrt(point_distance_sqr) > epsilon
+            // numerator²/point_distance_sqr > epsilon²
+            // numerator² > e*point_distance_sqr
+            let this_e = e*point_distance_sqr;
             wipe_segment = max_numerator.pow(2) < this_e;
             //println!("{}:{} max_numerator {} this_e {} wipe_segment {}", file!(), line!(), max_numerator, this_e, wipe_segment);
         }
