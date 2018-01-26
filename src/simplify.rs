@@ -554,7 +554,7 @@ mod test {
     #[test]
     fn remove_spikes_linestring4() {
         // Has a spike
-        //assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0), (1, 1), (10, 10), (1, 1), (0, 1), (0, 0)].into()), Some(vec![(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)].into()));
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0), (1, 1), (10, 10), (1, 1), (0, 1), (0, 0)].into()), Some(vec![(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)].into()));
 
         // Has a longer spike
         assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0), (1, 1), (10, 10), (20, 10), (10, 10), (1, 1), (0, 1), (0, 0)].into()), Some(vec![(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)].into()));
