@@ -253,10 +253,12 @@ fn simplify_multipolygon(geom: MultiPolygon<i32>, epsilon: i32) -> Option<MultiP
     }
 }
 
-pub fn remove_unneeded_points(mut geom: &mut Geometry<i32>) {
+pub fn remove_unneeded_points(mut geom: Geometry<i32>) -> Option<Geometry<i32>> {
     remove_points_in_line(&mut geom);
     remove_duplicate_points(&mut geom);
-    remove_spikes(&mut geom);
+    let geom = remove_spikes(geom);
+
+    geom
 }
 
 /// Remove unneeded points from lines.
@@ -396,75 +398,101 @@ fn remove_duplicate_points_linestring<T: CoordinateType+Debug>(ls: &mut LineStri
     }
 }
 
-fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: &mut LineString<T>) {
-    // TODO There is definitely a more effecient way to do this. There is certainly a lot of
-    // memory moving.
-
-    // we could have a few points in a line in a spike, but at each run of this loop, it'll only
-    // remove the end point of the spike. So we need to run it again and again to remove all the
-    // points, to entirely remove the spike.
-    loop {
-        let mut have_removed_points = false;
-
-        // keep_point[i] = true means we should keep this point. false means remove it.
-        let mut keep_point = vec![true; ls.0.len()];
-        let mut i = 1;
-        let mut have_removed_points = false;
-
-        for (i, points) in ls.0.windows(3).enumerate() {
-            let p1 = points[0];
-            let p2 = points[1];
-            let p3 = points[2];
-
-            // This algorithm is 'twice the triangle area'. If it's 0 (i.e. both sides are equal),
-            // then it's a zero area, i.e. spike.
-            if (p1.x() - p3.x())*(p2.y() - p1.y()) == (p1.x() - p2.x())*(p3.y() - p1.y()) {
-                // i is the index of the first point, but it's really the middle we want to
-                // change
-                keep_point[i+1] = false;
-                have_removed_points = true;
-            }
-        }
-
-
-        if have_removed_points {
-            // Create a new vec of points but only the ones we want to keep
-            let new_points: Vec<Point<T>> = ls.0.drain(..).zip(keep_point.into_iter()).filter_map(|(p, keep)| if keep { Some(p) } else { None }).collect();
-            
-            // and move that in for the points
-            ::std::mem::replace(&mut ls.0, new_points);
-
-            continue;
-        } else {
-            break;
-        }
+fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: LineString<T>) -> Option<LineString<T>> {
+    let LineString(mut points) = ls;
+    if points.len() < 2 {
+        return Some(LineString(points));
     }
+    println!("{}:{} points {:?}", file!(), line!(), points);
+
+    let mut new_points: Vec<Point<T>> = Vec::with_capacity(points.len());
+
+    let mut curr_point: Option<Point<T>> = None;
+    let mut next_point: Point<T>;
+    let mut should_add = false;
+
+    for point in points.into_iter() {
+        println!("{}:{} curr_point {:?} point {:?} new_points {:?}", file!(), line!(), curr_point, point, new_points);
+        if curr_point.is_none() {
+            curr_point = Some(point);
+            continue;
+        }
+
+        next_point = point;
+
+        should_add = match new_points.last() {
+            // there aren't any points yet, so we need to add this point.
+            // This should only happen at start of iteration
+            None => true,
+
+            Some(p1) => {
+                let p2 = curr_point.unwrap();
+                let p3 = next_point;
+
+                // This algorithm is 'twice the triangle area'. If it's 0 (i.e. both sides are equal),
+                // then it's a zero area, i.e. spike. If they aren't the same, then we should add it.
+                should_add = (p1.x() - p3.x())*(p2.y() - p1.y()) != (p1.x() - p2.x())*(p3.y() - p1.y());
+                println!("{}:{} should_add {:?}", file!(), line!(), should_add);
+                should_add
+            },
+        };
+        
+        if should_add {
+            // we should add curr_point
+            new_points.push(curr_point.unwrap());
+        }
+        curr_point = Some(next_point);
+    }
+
+    new_points.push(curr_point.unwrap());
+
+    Some(LineString(new_points))
 
 }
 
-pub fn remove_spikes<T: CoordinateType+Debug>(geom: &mut Geometry<T>) {
-    match *geom {
-        Geometry::LineString(ref mut ls) => remove_spikes_linestring(ls),
-        Geometry::MultiLineString(ref mut mls) => {
-            for mut ls in mls.0.iter_mut() {
-                remove_spikes_linestring(&mut ls);
+pub fn remove_spikes<T: CoordinateType+Debug>(geom: Geometry<T>) -> Option<Geometry<T>> {
+    match geom {
+        Geometry::LineString(ls) => remove_spikes_linestring(ls).map(Geometry::LineString),
+        Geometry::MultiLineString(mls) => {
+            let MultiLineString( linestrings ) = mls;
+            let mut new_linestrings: Vec<LineString<T>> = linestrings.into_iter().filter_map(|ls| remove_spikes_linestring(ls)).collect();
+
+            match new_linestrings.len() {
+                0 => None,
+                1 => Some(Geometry::LineString(new_linestrings.remove(0))),
+                _ => Some(Geometry::MultiLineString(MultiLineString(new_linestrings))),
             }
         },
-        Geometry::Polygon(ref mut p) => {
-            remove_spikes_linestring(&mut p.exterior);
-            for mut i in p.interiors.iter_mut() {
-                remove_spikes_linestring(&mut i);
-            }
-            },
-        Geometry::MultiPolygon(ref mut mp) => {
-            for mut p in mp.0.iter_mut() {
-                remove_spikes_linestring(&mut p.exterior);
-                for mut i in p.interiors.iter_mut() {
-                    remove_spikes_linestring(&mut i);
+        Geometry::Polygon(p) => {
+            let Polygon{ exterior, interiors } = p;
+            match remove_spikes_linestring(exterior) {
+                None => None,
+                Some(exterior) => {
+                    let these_interiors = interiors.into_iter().filter_map(|ls| remove_spikes_linestring(ls)).collect();
+                    Some(Geometry::Polygon(Polygon::new(exterior, these_interiors)))
                 }
             }
+        },
+        Geometry::MultiPolygon(mp) => {
+            let MultiPolygon( polygons ) = mp;
+            let mut new_polygons: Vec<Polygon<T>> = polygons.into_iter().filter_map(|p| {
+                let Polygon{ exterior, interiors } = p;
+                match remove_spikes_linestring(exterior) {
+                    None => None,
+                    Some(exterior) => {
+                        let these_interiors = interiors.into_iter().filter_map(|ls| remove_spikes_linestring(ls)).collect();
+                        Some(Polygon::new(exterior, these_interiors))
+                    }
+                }
+            }).collect();
+
+            match new_polygons.len() {
+                0 => None,
+                1 => Some(Geometry::Polygon(new_polygons.remove(0))),
+                _ => Some(Geometry::MultiPolygon(MultiPolygon(new_polygons))),
+            }
         }
-        _ => {},
+        x => Some(x),
     }
 }
 

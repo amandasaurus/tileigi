@@ -504,7 +504,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             }
             let mut geom = geom.unwrap();
 
-            simplify::remove_unneeded_points(&mut geom);
+            let geom = match simplify::remove_unneeded_points(geom) {
+                None => { continue; },
+                Some(g) => g,
+            };
 
             //let geom = validity::make_valid(geom);
 
