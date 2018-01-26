@@ -403,50 +403,48 @@ fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: LineString<T>) -> Optio
     if points.len() < 2 {
         return Some(LineString(points));
     }
-    println!("{}:{} points {:?}", file!(), line!(), points);
+    //println!("{}:{} points {:?}", file!(), line!(), points);
+    let mut points_to_keep = vec![true; points.len()];
+    let mut have_removed_points = false;
 
-    let mut new_points: Vec<Point<T>> = Vec::with_capacity(points.len());
+    loop {
+        have_removed_points = false;
+        // Technically points will get smaller all the time, and this slice is the same size, so it
+        // will be too big. But that doesn't matter
+        for keep in points_to_keep.iter_mut() {
+            *keep = true;
+        }
 
-    let mut curr_point: Option<Point<T>> = None;
-    let mut next_point: Point<T>;
-    let mut should_add = false;
+        {
+            //println!("{}:{} Start of loop points: {}", file!(), line!(), points.iter().map(|p| format!("({:?},{:?})", p.x(), p.y())).collect::<Vec<_>>().join(", "));
+            let mut last_kept = &points[0];
 
-    for point in points.into_iter() {
-        println!("{}:{} curr_point {:?} point {:?} new_points {:?}", file!(), line!(), curr_point, point, new_points);
-        if curr_point.is_none() {
-            curr_point = Some(point);
+            for (these_points, keep) in points[1..].windows(2).zip(points_to_keep[1..].iter_mut()) {
+                let p1 = *last_kept;
+                let p2 = these_points[0];
+                let p3 = these_points[1];
+
+                let zero_area = (p1.x() - p3.x())*(p2.y() - p1.y()) == (p1.x() - p2.x())*(p3.y() - p1.y());
+                //println!("{}:{} these_points {:?} zero_area {} last_kept {:?}", file!(), line!(), these_points, zero_area, last_kept);
+                if zero_area {
+                    *keep = false;
+                    have_removed_points = true;
+                } else {
+                    last_kept = &these_points[0];
+                }
+            }
+        }
+
+        //println!("{}:{} points:\n{}", file!(), line!(), points.iter().zip(points_to_keep.iter()).map(|(p, k)| format!("{:?} {:?} {}", p.x(), p.y(), k)).collect::<Vec<_>>().join("\n"));
+        if have_removed_points {
+            points = points.into_iter().zip(points_to_keep.iter()).filter_map(|(p, k)| if *k { Some(p) } else { None }).collect();
             continue;
+        } else {
+            break;
         }
-
-        next_point = point;
-
-        should_add = match new_points.last() {
-            // there aren't any points yet, so we need to add this point.
-            // This should only happen at start of iteration
-            None => true,
-
-            Some(p1) => {
-                let p2 = curr_point.unwrap();
-                let p3 = next_point;
-
-                // This algorithm is 'twice the triangle area'. If it's 0 (i.e. both sides are equal),
-                // then it's a zero area, i.e. spike. If they aren't the same, then we should add it.
-                should_add = (p1.x() - p3.x())*(p2.y() - p1.y()) != (p1.x() - p2.x())*(p3.y() - p1.y());
-                println!("{}:{} should_add {:?}", file!(), line!(), should_add);
-                should_add
-            },
-        };
-        
-        if should_add {
-            // we should add curr_point
-            new_points.push(curr_point.unwrap());
-        }
-        curr_point = Some(next_point);
     }
 
-    new_points.push(curr_point.unwrap());
-
-    Some(LineString(new_points))
+    Some(LineString(points))
 
 }
 
