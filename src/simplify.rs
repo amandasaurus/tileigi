@@ -526,4 +526,46 @@ mod test {
         assert_eq!(reduce_fraction_sqr(6, 30*30), (1, 5*5));
     }
 
+    #[test]
+    fn remove_spikes_linestring1() {
+        // known good simple cases
+        assert_eq!(remove_spikes_linestring(Vec::<(i32, i32)>::new().into()), Some(Vec::<(i32, i32)>::new().into()));
+        assert_eq!(remove_spikes_linestring(vec![(0, 0)].into()), Some(vec![(0, 0)].into()));
+    }
+
+    #[test]
+    fn remove_spikes_linestring2() {
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0)].into()), Some(vec![(0, 0), (1, 0)].into()));
+
+        // regular lines/shapes with no spikes
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0), (1, 1)].into()), Some(vec![(0, 0), (1, 0), (1, 1)].into()));
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)].into()), Some(vec![(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)].into()));
+    }
+
+    #[test]
+    fn remove_spikes_linestring3() {
+        // has a point that is collinear with another
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0), (2, 0)].into()), Some(vec![(0, 0), (2, 0)].into()));
+        // Several points collinear
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0), (2, 0), (5, 0)].into()), Some(vec![(0, 0), (5, 0)].into()));
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0), (2, 0), (3, 0), (5, 0)].into()), Some(vec![(0, 0), (5, 0)].into()));
+    }
+
+    #[test]
+    fn remove_spikes_linestring4() {
+        // Has a spike
+        //assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0), (1, 1), (10, 10), (1, 1), (0, 1), (0, 0)].into()), Some(vec![(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)].into()));
+
+        // Has a longer spike
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (1, 0), (1, 1), (10, 10), (20, 10), (10, 10), (1, 1), (0, 1), (0, 0)].into()), Some(vec![(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)].into()));
+
+    }
+
+    #[test]
+    fn remove_spikes_linestring5() {
+        // Has a 'turn'
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (0, 100), (0, 50)].into()), Some(vec![(0, 0), (0, 50)].into()));
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (0, 100), (0, 50), (50, 50)].into()), Some(vec![(0, 0), (0, 50), (50, 50)].into()));
+    }
+
 }
