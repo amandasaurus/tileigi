@@ -273,12 +273,14 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
         // If one of our worker threads has panic'ed, then this main programme should fail too
         worker.join().ok();
     }
-
-    fileio_tx.send(FileIOMessage::Quit).unwrap();
-    fileio_thread.join().unwrap();
-
     printer_tx.send(printer::PrinterMessage::Quit).unwrap();
     printer_thread.join().unwrap();
+
+    println!("All tiles generated. Finishing writing them to disk...");
+    fileio_tx.send(FileIOMessage::Quit).unwrap();
+    fileio_thread.join().unwrap();
+    println!("Finished.");
+
 }
 
 fn worker(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: Sender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, connection_pool: &ConnectionPool, layers: &Layers) {
