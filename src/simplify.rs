@@ -164,9 +164,14 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
             // distance = sqrt(point_distance_sqr)
             // numerator/sqrt(point_distance_sqr) > epsilon
             // numerator²/point_distance_sqr > epsilon²
-            // numerator² > e*point_distance_sqr
+            // numerator² > e*point_distance_sqr <- in this case, we use this point. if not, we
+            // wipe
             let this_e = e*point_distance_sqr;
-            wipe_segment = max_numerator.pow(2) < this_e;
+            //println!("{}:{} max_numerator {} this_e {} this_e/max_numerator {}", file!(), line!(), max_numerator, this_e, this_e/max_numerator);
+
+            // Simple
+            // max_numerator 16521702602 is a problem
+            wipe_segment = max_numerator < this_e && max_numerator < (this_e/max_numerator + 1) && max_numerator.pow(2) < this_e;
             //println!("{}:{} max_numerator {} this_e {} wipe_segment {}", file!(), line!(), max_numerator, this_e, wipe_segment);
         }
 
