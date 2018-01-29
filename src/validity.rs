@@ -637,6 +637,7 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     //println!("index {:?} point1 {:?} point2 {:?} new_points {:?}", idx, point1, point2, new_points);
                     new_points.sort_by(|&new_coord1, &new_coord2| order_points(((point1.x(), point1.y()), (point2.x(), point2.y())), new_coord1, new_coord2));
                     new_points.dedup();
+                    debug_assert!(new_points.len() < 20, "{}:{} There are {} points to be added after idx {}. That seems too high?! Investigate?\nnew_points {:?}\npoint1 = {:?}\npoint2 = {:?}", file!(), line!(), new_points.len(), idx, new_points, point1, point2);
                     Some((idx, new_points))
                 } else {
                     None
@@ -647,6 +648,10 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
             //println!("coords_to_insert {:?}", coords_to_insert);
 
             for (point_idx, new_points) in coords_to_insert.into_iter() {
+                //println!("{}:{} want to add {} points after idx {}", file!(), line!(), new_points.len(), point_idx);
+                if new_points.len() > 5 {
+                    //println!("{}:{} point {:?} next {:?} new_points {:?}", file!(), line!(), ls.0[point_idx], ls.0[point_idx+1], new_points);
+                }
                 for new_point in new_points.into_iter() {
                     //println!("Adding {:?} after index {}", new_point, point_idx+offset);
                     // +1 because we want the new point to be *after* the current point we're
@@ -655,9 +660,10 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     offset += 1;
                 }
             }
-            //println!("{} L {}", file!(), line!());
-
-            //println!("We added {} new points to the line", offset);
+            // I don't think there are many cases where you would need to add 100+ points, so maybe
+            // this is a mistake?
+            debug_assert!(offset <= 100, "{}:{} {} points were added to the line!! This seems too high? Investigate?", file!(), line!(), offset);
+            //println!("{}:{} We added {} new points to the line", file!(), line!(), offset);
         }
     }
     //println!("{}:{} finished", file!(), line!());
