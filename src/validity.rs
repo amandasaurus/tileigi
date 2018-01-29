@@ -436,7 +436,7 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
     unreachable!();
 }
 
-pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash+DivAssign+Rem+AddAssign>(mut geom: Geometry<T>) -> Geometry<T> {
+pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash+DivAssign+Rem+AddAssign+Into<f64>>(mut geom: Geometry<T>) -> Geometry<T> {
     //println!("{} L {}", file!(), line!());
     //simplify::remove_unneeded_points(&mut geom);
     if is_valid(&geom) {
@@ -451,7 +451,7 @@ pub fn make_valid<T: CoordinateType+Debug+Ord+Signed+Hash+DivAssign+Rem+AddAssig
     }
 }
 
-fn make_multipolygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut mp: MultiPolygon<T>) -> MultiPolygon<T> {
+fn make_multipolygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash+Into<f64>>(mut mp: MultiPolygon<T>) -> MultiPolygon<T> {
     //println!("{} L {}", file!(), line!());
     let MultiPolygon( polygons ) = mp;
 
@@ -466,7 +466,7 @@ fn make_multipolygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut mp: Mult
     make_rings_valid(rings)
 }
 
-fn make_polygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut p: Polygon<T>) -> MultiPolygon<T> {
+fn make_polygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash+Into<f64>>(mut p: Polygon<T>) -> MultiPolygon<T> {
     //println!("{} L {}", file!(), line!());
     let Polygon{ exterior, interiors } = p;
     let mut rings = interiors;
@@ -476,7 +476,7 @@ fn make_polygon_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut p: Polygon<T>
 
 }
 
-fn make_rings_valid<T: CoordinateType+Debug+Ord+Signed+Hash>(mut rings: Vec<LineString<T>>) -> MultiPolygon<T> {
+fn make_rings_valid<T: CoordinateType+Debug+Ord+Signed+Hash+Into<f64>>(mut rings: Vec<LineString<T>>) -> MultiPolygon<T> {
     //println!("{} L {}", file!(), line!());
 
     let mut new_rings: Vec<LineString<T>> = Vec::with_capacity(rings.len());
@@ -664,7 +664,7 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
 
 }
 
-fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Vec<LineString<T>> {
+fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq+Into<f64>>(ls: LineString<T>) -> Vec<LineString<T>> {
     let LineString( points ) = ls;
     if points.len() <= 3 {
         // Not enough points for a proper ring
