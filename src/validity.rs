@@ -528,7 +528,8 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
         // afterwards
 
         for (i, points12) in ls.0.windows(2).enumerate() {
-            //println!("{} L {}", file!(), line!());
+            let bad = i == 0 && false;
+            
             let (p1, p2) = (points12[0], points12[1]);
             //if bad {
             //    println!("{}:{} p1 {:?} p2 {:?}", file!(), line!(), p1, p2);
@@ -558,8 +559,10 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     Intersection::None | Intersection::EndToEnd => {},
 
                     Intersection::Crossing(crosspoint) => {
-                        //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
-                        //println!("i {} j {} crossing {:?}", i, j, crosspoint);
+                        if bad {
+                        println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
+                        println!("i {} j {} crossing {:?}", i, j, crosspoint);
+                        }
                         // A "unit square" can cause a crossing. ie. (0,0)-(1,1) and (1,0)-(0,1)
                         // (diagonal). That's returned as Crossing((1, 1)).
                         // So don't add a point if it would cause a duplicate
@@ -578,8 +581,10 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     },
 
                     Intersection::Overlapping(overlap1, overlap2)  => {
-                        //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
-                        //println!("i {} j {} overlapping {:?},{:?}", i, j, overlap1, overlap2);
+                        if bad {
+                        println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
+                        println!("i {} j {} overlapping {:?},{:?}", i, j, overlap1, overlap2);
+                        }
                         debug_assert!(overlap1 != overlap2);
                         //debug_assert!(collinear((x1, y1), (x2, y2), overlap1));
                         //debug_assert!(point_on_line_incl_end((x1, y1), (x2, y2), overlap1));
@@ -602,8 +607,10 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     },
 
                     Intersection::Touching((x0, y0)) => {
-                        //println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
-                        //println!("i {} j {} touching {:?},{:?}", i, j, x0, y0);
+                        if bad {
+                        println!("looking at i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", i, j, p1, p2, p3, p4);
+                        println!("i {} j {} touching {:?},{:?}", i, j, x0, y0);
+                        }
                         // (x0, y0) is the point where they touch
                         debug_assert!(collinear((x1, y1), (x2, y2), (x0, y0)));
                         debug_assert!(point_on_line_incl_end((x1, y1), (x2, y2), (x0, y0)));
@@ -665,6 +672,7 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
             debug_assert!(offset <= 100, "{}:{} {} points were added to the line!! This seems too high? Investigate?", file!(), line!(), offset);
             //println!("{}:{} We added {} new points to the line", file!(), line!(), offset);
         }
+        break;
     }
     //println!("{}:{} finished", file!(), line!());
 
