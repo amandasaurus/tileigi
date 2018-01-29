@@ -515,10 +515,10 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
         return;
     }
     //println!("\n\nXXX\nls {:?}\n", ls);
-    //println!("{} L {}", file!(), line!());
+    //println!("{}:{}", file!(), line!());
 
     loop {
-        //println!("{} L {}", file!(), line!());
+        //println!("{}:{} ls.0.len() {}", file!(), line!(), ls.0.len());
         //println!("\nStart of loop\n{:?}", ls.0);
         let mut coords_to_insert = HashMap::new();
         // Keys are the point indexes.
@@ -530,6 +530,9 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
         for (i, points12) in ls.0.windows(2).enumerate() {
             //println!("{} L {}", file!(), line!());
             let (p1, p2) = (points12[0], points12[1]);
+            //if bad {
+            //    println!("{}:{} p1 {:?} p2 {:?}", file!(), line!(), p1, p2);
+            //}
             
             for (j, points34) in ls.0[i+1..].windows(2).enumerate().take(ls.0.len()-i-1) {
                 let j = j + i + 1;
@@ -546,6 +549,11 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
                     continue;
                 }
 
+                //if bad {
+                //    println!("{}:{} i {} j {} p1 {:?} p2 {:?} p3 {:?} p4 {:?}", file!(), line!(), i, j, p1, p2, p3, p4);
+                //}
+
+                //println!("{} L {}", file!(), line!());
                 match intersection(x1, y1, x2, y2, x3, y3, x4, y4) {
                     Intersection::None | Intersection::EndToEnd => {},
 
@@ -613,13 +621,13 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
         }
 
 
-        //println!("{} L {}", file!(), line!());
+        //println!("{}:{}", file!(), line!());
         if coords_to_insert.is_empty() {
             break;
         } else {
-            //println!("{} L {}", file!(), line!());
+            //println!("{}:{}", file!(), line!());
             // When we insert a point into the vec, it'll push all after that along. Keep track of
-            // how many we've inserted.
+            // how many we've inserted, so we know the correct place to push the later ones
             let mut offset = 0;
 
             // Turn hashmap into a sorted vec, sorted by index to add
@@ -652,9 +660,7 @@ fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord>(ls: &mut Lin
             //println!("We added {} new points to the line", offset);
         }
     }
-    //println!("{} L {}", file!(), line!());
-
-    //println!("finished");
+    //println!("{}:{} finished", file!(), line!());
 
 }
 
@@ -677,6 +683,7 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq>(ls: LineString<T>) -> Ve
         outgoing_segments.entry((p.x(), p.y())).or_insert(vec![]).push(i);
     }
     //println!("{}:{} outgoing_segments {:?}", file!(), line!(), outgoing_segments);
+    //println!("{}:{} outgoing_segments w/ > 1 segment: {:?}", file!(), line!(), outgoing_segments.iter().filter_map(|(k, v)| if v.len() > 1 { Some((k, v)) } else { None }).collect::<Vec<_>>());
 
     // loops: a Vec of Vec's. Each inner vec is 2 point indexes, and means 'there is a loop from
     // this point to that point'

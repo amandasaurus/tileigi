@@ -272,13 +272,16 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     for worker in workers {
         // If one of our worker threads has panic'ed, then this main programme should fail too
         worker.join().ok();
+        println!("\n\nfinished worker");
     }
+
     printer_tx.send(printer::PrinterMessage::Quit).unwrap();
     printer_thread.join().unwrap();
 
     println!("All tiles generated. Finishing writing them to disk...");
     fileio_tx.send(FileIOMessage::Quit).unwrap();
     fileio_thread.join().unwrap();
+
     println!("Finished.");
 
 }
@@ -462,6 +465,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
         for (i, row) in res {
             num_objects += 1;
+            //println!("{}:{} metatile {:?} layer_name {} obj {}", file!(), line!(), metatile, layer_name, num_objects);
 
             // First object is the ST_AsBinary
             // TODO Does this do any copies that we don't want?
@@ -491,7 +495,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // removing them makes it slower, probably because of the lots of invalid geoms
 
             //if bad_obj {
-            //    println!("\nL {} geom {:?}", line!(), geom);
+            //    println!("\nL {} geom {:100}", line!(), format!("{:?}", geom));
             //    println!("\nL {} minx {} maxx {} miny {} maxy {} extent {}", line!(), minx, maxx, miny, maxy, extent);
             //}
             let mut geom = remap_geometry(geom, minx, maxx, miny, maxy, extent);
@@ -502,7 +506,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 continue;
             }
             if bad_obj {
-                println!("\nL {} geom {:?}", line!(), geom);
+                println!("\nL {} geom {:100}", line!(), format!("{:?}", geom));
             }
             let mut geom = geom.unwrap();
 
@@ -513,9 +517,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
             //let geom = validity::make_valid(geom);
 
-            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
+            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:100}", line!(), format!("{:?}", geom));
             if bad_obj {
-                println!("{}:{} geom {:?}", file!(), line!(), geom);
+                println!("{}:{} geom {:100}", file!(), line!(), format!("{:?}", geom));
             }
             //validity::ensure_polygon_orientation(&mut geom);
             //if ! is_valid_skip_expensive(&geom) {
@@ -538,10 +542,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                     }
             } else { geom };
             if bad_obj {
-                println!("L {} geom {:?}", line!(), geom);
+                println!("L {} geom {:100}", line!(), format!("{:?}", geom));
             }
             //println!("{} L {}", file!(), line!());
-            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:?}", line!(), geom);
+            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:100}", line!(), format!("{:?}", geom));
             
             // After simplifying a geometry, it's possible it becomes invalid. So we just skip the
             // geometries in that case.
@@ -560,9 +564,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             };
 
             //let geom = validity::make_valid(geom);
-            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:?}", line!(), geom);
+            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:100}", line!(), format!("{:?}", geom));
             if bad_obj {
-                println!("\nL {} geom {:?}", line!(), geom);
+                println!("\nL {} geom {:100}", line!(), format!("{:?}", geom));
             }
                     
             let mut properties = mapbox_vector_tile::Properties::new();
@@ -601,16 +605,20 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
 
             if bad_obj {
-                println!("\nL {} geom {:?}", line!(), geom);
+                println!("\nL {} geom {:100}", line!(), format!("{:?}", geom));
             }
-            //println!("{} L {}", file!(), line!());
             let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
                 |(t, g)| match g {
                     Some(mut g) => {
-                        //println!("{} L {}", file!(), line!());
+                        if bad_obj {
+                            println!("{} L {}", file!(), line!());
+                        }
                         //debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
 
                         let mut g = validity::make_valid(g);
+                        if bad_obj {
+                            println!("{} L {}", file!(), line!());
+                        }
                         if is_valid(&g) {
                             validity::ensure_polygon_orientation(&mut g);
                             Some((t, g))
@@ -622,7 +630,9 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 }).collect();
             geoms.reverse();
 
-            //println!("{} L {}", file!(), line!());
+            if bad_obj {
+                println!("{} L {}", file!(), line!());
+            }
             let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>| {
 
                 let i = (tile.x() - metatile.x()) as i32;
@@ -633,7 +643,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 //debug_assert!(is_valid(&geom));
 
                 if bad_obj {
-                    println!("\nL {} geom {:?}", line!(), geom);
+                    println!("\nL {} geom {:100}", line!(), format!("{:?}", geom));
                 }
 
                 let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
@@ -653,10 +663,16 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             // generating invalid geoms in the first place
             // One error was creating a linestring with 2 points, both the same
             loop {
+                if bad_obj {
+                    println!("{} L {}", file!(), line!());
+                }
                 if geoms.len() <= 1 { break; }
                 if let Some((tile, geom)) = geoms.pop() {
                     save_single_tile(tile, geom);
                 }
+            }
+            if bad_obj {
+                println!("{} L {}", file!(), line!());
             }
 
             if geoms.is_empty() { continue; }

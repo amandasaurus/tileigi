@@ -24,10 +24,10 @@ pub enum FileIOMessage {
 pub fn fileio_thread<D: TileDestination+Sized>(rx: Receiver<FileIOMessage>, mut dest: Box<D>)
 {
     for msg in rx.iter() {
-        //println!("{}:{} msg {:?}", file!(), line!(), msg);
         match msg {
             FileIOMessage::Quit => { break; },
             FileIOMessage::SaveTile(tile, bytes) => {
+                //println!("{}:{} got savetile {:?} bytes.len {}", file!(), line!(), tile, bytes.len());
                 dest.save_tile(tile, bytes);
             },
         }

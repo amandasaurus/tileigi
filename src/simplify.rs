@@ -160,7 +160,6 @@ fn rdp(mut points: Vec<Point<i32>>, epsilon: i32) -> Vec<Point<i32>> {
             index = this_index+start_idx+1;
 
             debug_assert!(max_numerator > 0);
-            // max_numerator is the max numerator
             // We want to know if numerator/distance > epsilon
             // distance = sqrt(point_distance_sqr)
             // numerator/sqrt(point_distance_sqr) > epsilon
