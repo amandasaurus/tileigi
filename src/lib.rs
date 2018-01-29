@@ -854,19 +854,39 @@ fn print_geom_as_geojson<T: CoordinateType+Into<f64>>(geom: &Geometry<T>, extent
         format!("[{}]", ls.0.iter().map(|p| format!("[{}, {}]", x_to_lon(p.x(), extent), y_to_lat(p.y(), extent))).collect::<Vec<_>>().join(", "))
     };
 
-    println!("\n");
+    let points_numbered = |p: &Vec<Point<T>>| -> String {
+        p.iter().enumerate().map(|(i, p)| {
+            let col = match i / 100 {
+                0 => "#f00",
+                1 => "#0f0",
+                2 => "#00f",
+                3 => "#ff0",
+                4 => "#f0f",
+                5 => "#fff",
+                6 => "#000",
+                7 => "#800",
+                8 => "#080",
+                9 => "#009",
+                _ => { return "".to_string(); },
+            };
+            let num = i % 100;
+            format!("{{\"type\":\"Feature\", \"properties\": {{\"marker-symbol\": \"{num}\", \"marker-color\": \"{col}\", \"title\":\"{i}\"}}, \"geometry\": {{ \"type\":\"Point\", \"coordinates\":[{x:?}, {y:?}]}}}}", x=x_to_lon(p.x(), extent), y=y_to_lat(p.y(), extent), num=num, col=col, i=i)
+        }).collect::<Vec<_>>().join(", ")
+    };
+
+    print!("\n{{\"type\":\"FeatureCollection\", \"features\":[");
     match *geom {
         Geometry::Polygon(ref poly) => {
-            print!("{{\"type\": \"Polygon\", \"coordinates\": [");
+            print!("{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"Polygon\", \"coordinates\": [");
             print!("{}", geojson(&poly.exterior));
             if !poly.interiors.is_empty() {
                 print!(", ");
                 print!("{}", poly.interiors.iter().map(|int| geojson(&int)).collect::<Vec<_>>().join(", "));
             }
-            print!("]}}");
+            print!("]}}}}");
         },
         Geometry::MultiPolygon(ref mp) => {
-            print!("{{\"type\": \"MultiPolygon\", \"coordinates\": [");
+            print!("{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"MultiPolygon\", \"coordinates\": [");
             let mut first = true;
             for poly in mp.0.iter() {
                 if !first { print!(", "); }
@@ -879,11 +899,16 @@ fn print_geom_as_geojson<T: CoordinateType+Into<f64>>(geom: &Geometry<T>, extent
                 print!("]");
                 first = false;
             }
-
-
-            print!("]}}");
+            print!("]}}}}");
         },
+        Geometry::LineString(ref ls) => {
+            print!("{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"LineString\", \"coordinates\": ");
+            print!("{}", geojson(&ls));
+            print!("}}}}");
+            print!(", {}", points_numbered(&ls.0));
+        },
+
         _ => unimplemented!(),
     }
-    println!("\n");
+    println!("]}}\n");
 }
