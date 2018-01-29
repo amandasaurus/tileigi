@@ -748,8 +748,9 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq+Into<f64>>(ls: LineString
     // it contains)
     loops.sort_by_key(|i| (i[1]-i[0], i[0]));
 
-    debug_assert!(loops.iter().all(|idxes| idxes.len() == 2), "There is a point with != 2 segments: {:?}\npoints: {:?}", loops, points);
-    if loops.iter().any(|idxes| idxes.len() != 2) {
+    //::print_geom_as_geojson(&Geometry::LineString(LineString(points.clone())), 4096.*8.);
+    debug_assert!(loops.iter().all(|idxes| idxes.len() <= 3), "There is a loop with > 3 segments: {:?}", loops);
+    if loops.iter().any(|idxes| idxes.len() > 3) {
         //eprintln!("{} {} loops {:?}", file!(), line!(), loops);
         // FIXME do something here
         return vec![];
