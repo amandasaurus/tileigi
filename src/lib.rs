@@ -23,7 +23,7 @@ use std::time::Instant;
 use std::borrow::{Cow, Borrow};
 
 use std::thread;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{channel, sync_channel, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 
 use yaml_rust::{YamlLoader, Yaml};
@@ -233,7 +233,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     let (printer_tx, printer_rx) = channel();
     let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
 
-    let (fileio_tx, fileio_rx) = channel();
+    let (fileio_tx, fileio_rx) = sync_channel(10);
 
     let mut fileio_thread = match dest {
         &TileDestinationType::TileStashDirectory(ref path) => {
@@ -286,7 +286,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
 }
 
-fn worker(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: Sender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, connection_pool: &ConnectionPool, layers: &Layers) {
+fn worker(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, connection_pool: &ConnectionPool, layers: &Layers) {
     loop {
         let metatile = metatile_iterator.lock().unwrap().next();
         if let None = metatile {
