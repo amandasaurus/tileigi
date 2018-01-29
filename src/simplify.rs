@@ -439,6 +439,52 @@ pub fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: LineString<T>) -> O
             }
         }
 
+        // check whether the first/last point is the point of a spike
+        let l = points.len();
+        let keep_ends = points_to_keep[0] && points_to_keep[1] && points_to_keep[l-1] && points_to_keep[l-2];
+        let is_closed = points[0] == points[l-1];
+
+        // Is it a ring?
+        if l >= 4 && is_closed && keep_ends {
+
+            if points[1] == points[l-2] {
+                // Simple case, here point 0 is the spike, and the second & second last point are
+                // the same, so we can just chop off the first/last point
+                points_to_keep[0] = false;
+                points_to_keep[l-1] = false;
+                have_removed_points = true;
+            } else  {
+                // do regular spike test
+                // p2 = points[0] = points[l-1] (i.e. closed ring)
+                let p1 = points[l-2];
+                let p2 = points[0];
+                let p3 = points[1];
+
+                let zero_area = (p1.x() - p3.x())*(p2.y() - p1.y()) == (p1.x() - p2.x())*(p3.y() - p1.y());
+                //println!("{}:{} these_points {:?} zero_area {} last_kept {:?}", file!(), line!(), these_points, zero_area, last_kept);
+                if zero_area {
+                    // we need to remove both first & last, but we need to find out whether the
+                    // second or second last point is the one which should be the new first/last
+
+                    // distance from the spike (ie. first/last point) to the second point (ie the
+                    // front of the linestring), squared
+                    let dist_spike_front_sqrd = (p3.x() - p2.x())*(p3.x() - p2.y()) + (p3.y() - p2.y())*(p3.y() - p2.y());
+                    let dist_spike_end_sqrd = (p1.x() - p2.x())*(p1.x() - p2.x()) + (p1.y() - p2.y())*(p1.y() - p2.y());
+
+                    if dist_spike_front_sqrd < dist_spike_end_sqrd {
+                        points_to_keep[0] = false;
+                        points[l-1] = points[1].clone();
+                        points_to_keep[l-1] = true;
+                    } else {
+                        points_to_keep[l-1] = false;
+                        points[0] = points[l-2].clone();
+                        points_to_keep[0] = true;
+                    }
+                    have_removed_points = true;
+                }
+            }
+        }
+
         //println!("{}:{} points:\n{}", file!(), line!(), points.iter().zip(points_to_keep.iter()).map(|(p, k)| format!("{:?} {:?} {}", p.x(), p.y(), k)).collect::<Vec<_>>().join("\n"));
         if have_removed_points {
             points = points.into_iter().zip(points_to_keep.iter()).filter_map(|(p, k)| if *k { Some(p) } else { None }).collect();
