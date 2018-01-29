@@ -620,4 +620,47 @@ mod test {
         assert_eq!(remove_spikes_linestring(vec![(0, 0), (0, 100), (0, 50), (50, 50)].into()), Some(vec![(0, 0), (0, 50), (50, 50)].into()));
     }
 
+    #[test]
+    fn remove_spikes_linestring6() {
+        // zero area lines. Should be removed to None
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (0, 100), (0, 0)].into()), None);
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (0, 10), (0, 50), (0, 0)].into()), None);
+        assert_eq!(remove_spikes_linestring(vec![(0, 0), (0, 10), (0, 50), (50, 50), (0, 50), (0, 0)].into()), None);
+    }
+
+    #[test]
+    fn remove_spikes_linestring7() {
+        // When the spike is at the start/end, (ie. point 0 should be removed)
+        // Simple cases where the new start/end is still in there as a point
+        assert_eq!(remove_spikes_linestring(vec![(-1, 1), (1, 1), (0, 0), (0, -5), (0, 0), (-1, 1)].into()), Some(vec![(-1, 1), (1, 1), (0, 0), (-1, 1)].into()));
+        assert_eq!(remove_spikes_linestring(vec![(0, -5), (0, 0), (1, 1), (-1, 1), (0, 0), (0, -5)].into()), Some(vec![(0, 0), (1, 1), (-1, 1), (0, 0)].into()));
+    }
+
+    #[test]
+    fn remove_spikes_linestring8() {
+        // When the spike is at the start/end, (ie. point 0 should be removed)
+        assert_eq!(remove_spikes_linestring(vec![(0, -10), (0, 0), (1, 0), (1, 1), (0, 1), (0, 0), (0, -10)].into()), Some(vec![(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)].into()));
+
+        assert_eq!(remove_spikes_linestring(vec![(0, -10), (0, 0), (1, 0), (1, 1), (0, 1), (0, -10)].into()), Some(vec![(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)].into()));
+    }
+    #[test]
+    fn remove_spikes_linestring9() {
+        // c---d-e
+        // |\ /  |
+        // | g   |
+        // h-----i
+        let a = Point::new(0, 0); let b = Point::new(3, 0); let c = Point::new(6, 0); let d = Point::new(10, 0); let e = Point::new(12, 0);
+        let f = Point::new(1, 1); let g = Point::new(5, 1);
+        let h = Point::new(6, 2); let i = Point::new(12, 2);
+        let ls: LineString<_> = vec![c, d, g, c, h, i, e, d, c].into();
+        assert_eq!(remove_spikes_linestring(ls), Some(vec![e, d, g, c, h, i, e].into()));
+
+        // Some other random combinions
+        // test all the things
+        assert_eq!(remove_spikes_linestring(vec![c, g, d, e, d, c].into()), Some(vec![c, g, d, c].into()));
+        assert_eq!(remove_spikes_linestring(vec![c, g, d, e, c].into()), Some(vec![c, g, d, c].into()));
+        
+        assert_eq!(remove_spikes_linestring(vec![g, c, d, c, h, i, e, d, g].into()), Some(vec![g, c, h, i, e, d, g].into()));
+    }
+
 }
