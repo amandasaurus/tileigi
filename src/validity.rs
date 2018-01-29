@@ -1505,12 +1505,14 @@ mod test {
         //   |  |
         //   e--f
         // Triangle abc is filled in, bcd isn't. cdef is a square that's filled in.
-        // Ideally we want 2 rings abdefca and bcdb
+        // we get a ring bcdb and then the exterior.
+        // It would be better to get a triangle abca, and then the square bdfeb with the spike from
+        // cd excluded.
 
         let result = dissolve_into_rings(LineString(vec![a, b, c, d, b, e, f, d, c, a]));
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], vec![b, c, d, b].into());
-        assert_eq!(result[1], vec![a, b, e, f, d, c, a].into());
+        assert_eq!(result[1], vec![a, b, e, f, c, a].into());
     }
 
     #[test]
@@ -1530,8 +1532,9 @@ mod test {
 
         let result = dissolve_into_rings(LineString(vec![a, b, c, d, e, f, g, h, i, j, f, e, a]));
         assert_eq!(result.len(), 2);
-        assert_eq!(result[0], vec![f, g, h, i, j, f].into());
-        assert_eq!(result[1], vec![a, b, c, d, e, a].into());
+        // e & f are gone
+        assert_eq!(result[0], vec![j, g, h, i, j].into());
+        assert_eq!(result[1], vec![a, b, c, d, a].into());
     }
 
     #[test]
@@ -1581,6 +1584,22 @@ mod test {
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], vec![a, b, c, a].into());
         assert_eq!(result[1], vec![a, d, e, a].into());
+    }
+
+    #[test]
+    fn dissolve_into_rings7() {
+        // a--b--c---d-e
+        // \ /   |\ /  |
+        //  f    | g   |
+        //       h-----i
+        let a = Point::new(0, 0); let b = Point::new(3, 0); let c = Point::new(6, 0); let d = Point::new(10, 0); let e = Point::new(12, 0);
+        let f = Point::new(1, 1); let g = Point::new(5, 1);
+        let h = Point::new(6, 2); let i = Point::new(12, 2);
+        let ls: LineString<_> = vec![a, f, b, c, d, g, c, h, i, e, d, c, b, a].into();
+        let result = dissolve_into_rings(ls);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], vec![e, d, g, c, h, i, e].into());
+        assert_eq!(result[1], vec![a, f, b, a].into());
     }
 
     #[test]
