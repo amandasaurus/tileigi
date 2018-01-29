@@ -760,8 +760,10 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq+Into<f64>>(ls: LineString
 
 
     for loop_indexes in loops {
-        assert!(loop_indexes.len() == 2);
-        let (start, end) = (loop_indexes[0], loop_indexes[1]);
+        //assert!(loop_indexes.len() == 2);
+        let start = *loop_indexes.first().unwrap();
+        let end = *loop_indexes.last().unwrap();
+        //let (start, end) = (loop_indexes[0], loop_indexes[1]);
         if !point_unassigned[start] {
             // this has already been removed earlier in another loop
             continue;
