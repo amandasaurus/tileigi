@@ -233,7 +233,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     let (printer_tx, printer_rx) = channel();
     let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
 
-    let (fileio_tx, fileio_rx) = sync_channel(10);
+    let (fileio_tx, fileio_rx) = sync_channel(10_000);
 
     let mut fileio_thread = match dest {
         &TileDestinationType::TileStashDirectory(ref path) => {
