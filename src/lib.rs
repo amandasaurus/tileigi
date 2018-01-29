@@ -483,7 +483,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
                 Ok(g) => g,
             };
 
-            let mut bad_obj = false;
+            let mut bad_obj = false && metatile == &Metatile::new(8, 7, 32, 80).unwrap() && num_objects >= 3086;
+            //if ! bad_obj {
+            //    continue;
+            //}
 
             if bad_obj {
                 println!("\nL {} starting tile {:?}", line!(), metatile);
