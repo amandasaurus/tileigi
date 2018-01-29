@@ -803,12 +803,12 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq+Into<f64>>(ls: LineString
         }
     }
 
-    //println!("{}:{} point_unassigned {:?}", file!(), line!(), point_unassigned);
+    // This (below) isn't true anymore? TODO confirm
     // There will always be the last/first point unassigned since we keep the end around, which
     // means the endpoint of the outer ring is kept. So they should all be false, except the last
     // which is true
-    debug_assert!(point_unassigned.iter().take(point_unassigned.len()-1).all(|x| !x), "{:?}", point_unassigned);
-    debug_assert!(point_unassigned[point_unassigned.len()-1]);
+    //debug_assert!(point_unassigned.iter().take(point_unassigned.len()-1).all(|x| !x), "{:?}", point_unassigned);
+    //debug_assert!(point_unassigned[point_unassigned.len()-1]);
 
     results
 }
