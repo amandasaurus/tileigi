@@ -795,7 +795,9 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq+Into<f64>>(ls: LineString
             //point_unassigned[end] = false;
             new_ls.push(points[end].clone());
             //println!("adding ls {:?}", new_ls);
-            results.push(LineString(new_ls));
+            if let Some(new_ls) = simplify::remove_spikes_linestring(LineString(new_ls)) {
+                results.push(new_ls);
+            }
         } else {
             //println!("too short");
         }
