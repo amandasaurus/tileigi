@@ -830,18 +830,18 @@ fn remap_geometry(geom: Geometry<f64>, minx: f64, maxx: f64, miny: f64, maxy: f6
     }
 }
 
-fn x_to_lon(x: i32, extent: f64) -> f64 {
+fn x_to_lon<T: CoordinateType+Into<f64>>(x: T, extent: f64) -> f64 {
     let earth_radius = 6378137.;
-    let x = x as f64;
+    let x: f64 = x.into();
     let x = (x/extent) * (2.*20037508.34) - 20037508.34;
     //let x = self.lon() * 20037508.34 / 180.;
 
     (x/earth_radius).to_degrees()
 }
 
-fn y_to_lat(y: i32, extent: f64) -> f64 {
+fn y_to_lat<T: CoordinateType+Into<f64>>(y: T, extent: f64) -> f64 {
     let old_y = y;
-    let y = y as f64;
+    let y: f64 = y.into();
     let y = y/extent;
     
     let pi = std::f64::consts::PI;
@@ -849,8 +849,8 @@ fn y_to_lat(y: i32, extent: f64) -> f64 {
     ((1. - 2.*y) * pi).sinh().atan().to_degrees()
 }
 
-fn print_geom_as_geojson(geom: &Geometry<i32>, extent: f64) {
-    let geojson = |ls: &LineString<i32>| -> String {
+fn print_geom_as_geojson<T: CoordinateType+Into<f64>>(geom: &Geometry<T>, extent: f64) {
+    let geojson = |ls: &LineString<T>| -> String {
         format!("[{}]", ls.0.iter().map(|p| format!("[{}, {}]", x_to_lon(p.x(), extent), y_to_lat(p.y(), extent))).collect::<Vec<_>>().join(", "))
     };
 
