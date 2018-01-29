@@ -443,7 +443,11 @@ pub fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: LineString<T>) -> O
         }
     }
 
-    Some(LineString(points))
+    if points.len() == 2 && points[0] == points[1] {
+        None
+    } else {
+        Some(LineString(points))
+    }
 
 }
 
