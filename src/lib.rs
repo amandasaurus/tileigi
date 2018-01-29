@@ -277,9 +277,10 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
     printer_tx.send(printer::PrinterMessage::Quit).unwrap();
     printer_thread.join().unwrap();
+    fileio_tx.send(FileIOMessage::Quit).unwrap();
 
     println!("All tiles generated. Finishing writing them to disk...");
-    fileio_tx.send(FileIOMessage::Quit).unwrap();
+
     fileio_thread.join().unwrap();
 
     println!("Finished.");
