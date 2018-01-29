@@ -397,7 +397,7 @@ fn remove_duplicate_points_linestring<T: CoordinateType+Debug>(ls: &mut LineStri
     }
 }
 
-fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: LineString<T>) -> Option<LineString<T>> {
+pub fn remove_spikes_linestring<T: CoordinateType+Debug>(ls: LineString<T>) -> Option<LineString<T>> {
     let LineString(mut points) = ls;
     if points.len() < 2 {
         return Some(LineString(points));
