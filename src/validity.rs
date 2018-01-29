@@ -733,6 +733,12 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq+Into<f64>>(ls: LineString
     let mut point_unassigned = vec![true; points.len()];
     let mut results: Vec<LineString<T>> = vec![];
 
+    // sort loops where the smaller length (in terms of number of points) are to the front.
+    // Ideal: Sort them so that if a loop is a subset of a larger loop, then the smaller is ahead,
+    // so the smaller, "inner" loop will be removed first. Unless something really strange is going
+    // on, this sort-by-length should do it (since an outer loop will be longer than the inner one
+    // it contains)
+    loops.sort_by_key(|i| (i[1]-i[0], i[0]));
 
     debug_assert!(loops.iter().all(|idxes| idxes.len() == 2), "There is a point with != 2 segments: {:?}\npoints: {:?}", loops, points);
     if loops.iter().any(|idxes| idxes.len() != 2) {
@@ -744,15 +750,6 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq+Into<f64>>(ls: LineString
     // This is not ideal, but it seems to make valid geometries for MbSC
     //let mut loops = loops.into_iter().filter(|idxes| idxes.len() == 2).collect::<Vec<_>>();
 
-    //println!("points {:?}", points);
-    //println!("outgoing_segments {:?}", outgoing_segments);
-    // sort loops where the smaller length (in terms of number of points) are to the front.
-    // Ideal: Sort them so that if a loop is a subset of a larger loop, then the smaller is ahead,
-    // so the smaller, "inner" loop will be removed first. Unless something really strange is going
-    // on, this sort-by-length should do it (since an outer loop will be longer than the inner one
-    // it contains)
-    loops.sort_by_key(|i| (i[1]-i[0], i[0]));
-    //println!("{}:{} loops {:?}", file!(), line!(), loops);
 
     for loop_indexes in loops {
         assert!(loop_indexes.len() == 2);
