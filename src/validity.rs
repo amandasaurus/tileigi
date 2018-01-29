@@ -756,7 +756,6 @@ fn dissolve_into_rings<T: CoordinateType+Debug+Hash+Eq+Into<f64>>(ls: LineString
         return vec![];
     }
     // Remove weird loops.
-    // This is not ideal, but it seems to make valid geometries for MbSC
     //let mut loops = loops.into_iter().filter(|idxes| idxes.len() == 2).collect::<Vec<_>>();
 
 
