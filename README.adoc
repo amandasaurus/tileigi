@@ -1,0 +1,15 @@
+tileigi: Let us Tile!
+
+tileigi generates vector tiles from a postgres database.
+
+The input format is the `.tm2source` YAML file format. 
+
+
+
+Sample command:
+
+    tileigi --data-yml ./myfile-data.yml  --dest-mbtiles ./mytiles.mbtiles
+
+It is still in early days, and barely beta qualtiy, and the dependencies can be funny.
+
+Cpoyright under the GNU Affero GPL v3 (or later).
