@@ -14,6 +14,7 @@ fn main() {
 
     let matches = App::new("tileigi")
         .version(crate_version!())
+        .about("Generate vector tiles from a yml file")
         .setting(AppSettings::AllowLeadingHyphen)
         .arg(Arg::with_name("data_yml").long("data-yml").takes_value(true).required(true).help("Filename of the .yml file"))
 
