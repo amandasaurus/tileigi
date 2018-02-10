@@ -1,4 +1,5 @@
 extern crate slippy_map_tiles;
+#[macro_use]
 extern crate clap;
 
 extern crate tilegen;
@@ -11,7 +12,8 @@ use tilegen::*;
 
 fn main() {
 
-    let matches = App::new("test")
+    let matches = App::new("tileigi")
+        .version(crate_version!())
         .setting(AppSettings::AllowLeadingHyphen)
         .arg(Arg::with_name("data_yml").long("data-yml").takes_value(true).required(true).help("Filename of the .yml file"))
 
