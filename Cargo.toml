@@ -6,7 +6,7 @@ authors = ["Rory McCann <rory@technomancy.org>"]
 [dependencies]
 mapbox_vector_tile = { git = "https://github.com/rory/rust-mapbox-vector-tile.git" }
 yaml-rust = "0.3"
-slippy-map-tiles = { path = "../slippy-map-tiles" }
+slippy-map-tiles = "0.12"
 postgres = { path = "../rust-postgres/postgres" }
 wkb = { git = "https://github.com/rory/rust-wkb.git" }
 geo = { git = "https://github.com/rory/rust-geo.git", branch = "rory-everything" }
