@@ -1,0 +1,22 @@
+[package]
+name = "tilegen"
+version = "0.1.0"
+authors = ["Rory McCann <rory@technomancy.org>"]
+
+[dependencies]
+mapbox_vector_tile = { git = "https://github.com/rory/rust-mapbox-vector-tile.git" }
+yaml-rust = "0.3"
+slippy-map-tiles = { path = "../slippy-map-tiles" }
+postgres = { path = "../rust-postgres/postgres" }
+wkb = { git = "https://github.com/rory/rust-wkb.git" }
+geo = { git = "https://github.com/rory/rust-geo.git", branch = "rory-everything" }
+clap = "2"
+serde_json = "1"
+users = "0.6.0"
+num-traits = "0.1"
+md5 = "0.3.6"
+rusqlite = "0.13.0"
+byteorder = "1.2.1"
+
+[profile.release]
+debug=true
