@@ -16,6 +16,37 @@ Sample command:
 
     tileigi --data-yml ./myfile-data.yml  --dest-mbtiles ./mytiles.mbtiles
 
+== Options
+
+    tileigi 0.2.0
+    Generate vector tiles from a yml file
+    
+    USAGE:
+        tileigi [FLAGS] [OPTIONS] --data-yml <data_yml>
+    
+    FLAGS:
+        -h, --help             Prints help information
+            --if-not-exists    Do not generate a tile if the file already exists. Doesn't work with mbtiles (yet)
+            --no-compress      Do not compress the pbf files
+        -V, --version          Prints version information
+    
+    OPTIONS:
+            --bbox <bbox>                        Only generate tiles inside this bbox. 'planet' for planet, or
+                                                 minlon,minlat,maxlon,maxlat
+            --bbox-bottom <bbox-bottom>          BBox, bottom
+            --bbox-left <bbox-left>              BBox, left
+            --bbox-right <bbox-right>            BBox, right
+            --bbox-top <bbox-top>                BBox, top
+            --data-yml <data_yml>                Filename of the .yml file
+            --dest-dir <dest_dir>                Save tiles to this mbtiles file
+            --dest-mbtiles <dest_mbtiles>        Save tiles to this TileStash directory path
+            --dest-modtile <dest_modtile>        Save tiles to this mod_tile directory path
+            --maxzoom <maxzoom>                  Maximum zoom to generate [default: 14]
+            --metatile-scale <metatile-scale>    Size of metatile to use (8x8 default) [default: 8]
+            --minzoom <minzoom>                  Minimum zoom to generate [default: 0]
+            --threads <threads>                  Number of concurrent generation threads to run [default: 1]
+
+
 It is still in early days, and barely beta qualtiy, and the dependencies can be funny.
 
 Cpoyright under the GNU Affero GPL v3 (or later).
