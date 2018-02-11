@@ -1,14 +1,22 @@
 = tileigi: Let us Tile!
 
-tileigi generates vector tiles from a postgres database.
+tileigi generates vector tiles from a PostgreSQL/PostGIS database. It's goals
+are to be as fast as possible, and as easy to install as possible.
 
 The input format is the `.tm2source` YAML file format. 
 
 == Installation
 
+Install rust & download/clone this repository, and then build it.
+
     cargo build --release
 
 `release` mode is much faster than the default `debug` mode.
+
+The binary will be in `./target/release/tileigi`. The binary file should be
+self contained and have no extra dependencies. During this early development
+phase, debug symbols are on, so the file can be large. Reduce it's size with
+`strip ./target/release/tileigi`
 
 == Example usage
 
