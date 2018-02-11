@@ -1,10 +1,16 @@
-tileigi: Let us Tile!
+= tileigi: Let us Tile!
 
 tileigi generates vector tiles from a postgres database.
 
 The input format is the `.tm2source` YAML file format. 
 
+== Installation
 
+    cargo build --release
+
+`release` mode is much faster than the default `debug` mode.
+
+== Example usage
 
 Sample command:
 
