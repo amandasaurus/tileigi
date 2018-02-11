@@ -57,4 +57,4 @@ Sample command:
 
 It is still in early days, and barely beta qualtiy, and the dependencies can be funny.
 
-Cpoyright under the GNU Affero GPL v3 (or later).
+Copyright under the GNU Affero GPL v3 (or later) (see the file link:LICENCE[LICENCE])
