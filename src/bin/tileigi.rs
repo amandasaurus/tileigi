@@ -61,7 +61,19 @@ fn main() {
     let bbox: Option<BBox> = match matches.value_of("bbox") {
         Some("planet") => None,
         Some(bbox_string) => Some(BBox::new_from_string(bbox_string).expect("Invalid bbox")),
-        None => None,
+        None => {
+            if matches.is_present("bbox-top") {
+                // if we have one, we presume we have them all
+                Some(BBox::new(
+                        matches.value_of("bbox-top").unwrap_or("90.0").parse().unwrap(),
+                        matches.value_of("bbox-left").unwrap_or("-180.0").parse().unwrap(),
+                        matches.value_of("bbox-bottom").unwrap_or("-90.0").parse().unwrap(),
+                        matches.value_of("bbox-right").unwrap_or("180.0").parse().unwrap(),
+                    ).unwrap())
+            } else {
+                None
+            }
+        },
     };
 
     generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads);
