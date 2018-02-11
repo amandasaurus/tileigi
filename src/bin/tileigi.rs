@@ -5,7 +5,7 @@ extern crate clap;
 extern crate tilegen;
 
 use std::path::PathBuf;
-use clap::{Arg, App, AppSettings};
+use clap::{Arg, App, AppSettings, ArgGroup};
 use slippy_map_tiles::BBox;
 
 use tilegen::*;
@@ -16,26 +16,29 @@ fn main() {
         .version(crate_version!())
         .about("Generate vector tiles from a yml file")
         .setting(AppSettings::AllowLeadingHyphen)
-        .arg(Arg::with_name("data_yml").long("data-yml").takes_value(true).required(true).help("Filename of the .yml file"))
+        .arg(Arg::with_name("data_yml").long("data-yml").takes_value(true).value_name("FILENAME").required(true).help("Filename of the .yml file"))
 
-        .arg(Arg::with_name("dest_dir").long("dest-dir").takes_value(true).conflicts_with("dest-mbtiles").help("Save tiles to this mbtiles file"))
-        .arg(Arg::with_name("dest_mbtiles").long("dest-mbtiles").takes_value(true).conflicts_with("dest_dir").help("Save tiles to this TileStash directory path"))
-        .arg(Arg::with_name("dest_modtile").long("dest-modtile").takes_value(true).conflicts_with("dest-mbtiles").help("Save tiles to this mod_tile directory path"))
+        .arg(Arg::with_name("dest_dir").long("dest-dir").takes_value(true).value_name("DIR").help("Save tiles to this mbtiles file"))
+        .arg(Arg::with_name("dest_mbtiles").long("dest-mbtiles").takes_value(true).value_name("FILENAME").help("Save tiles to this TileStash directory path"))
+        .arg(Arg::with_name("dest_modtile").long("dest-modtile").takes_value(true).value_name("DIR").help("Save tiles to this mod_tile directory path"))
+        .group(ArgGroup::with_name("dest").args(&["dest_dir", "dest_mbtiles", "dest_modtile"]).required(true))
 
-        .arg(Arg::with_name("minzoom").long("minzoom").default_value("0").help("Minimum zoom to generate"))
-        .arg(Arg::with_name("maxzoom").long("maxzoom").default_value("14").help("Maximum zoom to generate"))
+        .arg(Arg::with_name("minzoom").long("minzoom").value_name("ZOOM").default_value("0").help("Minimum zoom to generate"))
+        .arg(Arg::with_name("maxzoom").long("maxzoom").value_name("ZOOM").default_value("14").help("Maximum zoom to generate"))
 
-        .arg(Arg::with_name("bbox").long("bbox").takes_value(true).conflicts_with_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]).help("Only generate tiles inside this bbox. 'planet' for planet, or minlon,minlat,maxlon,maxlat"))
+        .arg(Arg::with_name("bbox").long("bbox").takes_value(true).value_name("MINLON,MINLAT,MAXLON,MAXLAT").help("Only generate tiles inside this bbox. 'planet' for planet, or minlon,minlat,maxlon,maxlat"))
 
-        .arg(Arg::with_name("bbox-bottom").long("bbox-bottom").takes_value(true).conflicts_with("bbox").requires_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]).help("BBox, bottom"))
-        .arg(Arg::with_name("bbox-top").long("bbox-top").takes_value(true).conflicts_with("bbox").requires_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]).help("BBox, top"))
-        .arg(Arg::with_name("bbox-left").long("bbox-left").takes_value(true).conflicts_with("bbox").requires_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]).help("BBox, left"))
-        .arg(Arg::with_name("bbox-right").long("bbox-right").takes_value(true).conflicts_with("bbox").requires_all(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]).help("BBox, right"))
+        .arg(Arg::with_name("bbox-bottom").long("bbox-bottom").takes_value(true).value_name("DEGREES").help("BBox, bottom"))
+        .arg(Arg::with_name("bbox-top").long("bbox-top").takes_value(true).value_name("DEGREES").help("BBox, top"))
+        .arg(Arg::with_name("bbox-left").long("bbox-left").takes_value(true).value_name("DEGREES").help("BBox, left"))
+        .arg(Arg::with_name("bbox-right").long("bbox-right").takes_value(true).value_name("DEGREES").help("BBox, right"))
+        .group(ArgGroup::with_name("bbox_individual").args(&["bbox-bottom", "bbox-top", "bbox-left", "bbox-right"]).conflicts_with("bbox").multiple(true))
+
+        .arg(Arg::with_name("metatile-scale").long("metatile-scale").default_value("8").value_name("NUMBER").help("Size of metatile to use (8x8 default)"))
+        .arg(Arg::with_name("threads").long("threads").default_value("1").value_name("NUBMER").help("Number of concurrent generation threads to run"))
 
         .arg(Arg::with_name("if_not_exists").long("if-not-exists").help("Do not generate a tile if the file already exists. Doesn't work with mbtiles (yet)"))
         .arg(Arg::with_name("no_compress").long("no-compress").help("Do not compress the pbf files"))
-        .arg(Arg::with_name("metatile-scale").long("metatile-scale").default_value("8").help("Size of metatile to use (8x8 default)"))
-        .arg(Arg::with_name("threads").long("threads").default_value("1").help("Number of concurrent generation threads to run"))
         .get_matches();
 
     let data_yml = matches.value_of("data_yml").unwrap();
