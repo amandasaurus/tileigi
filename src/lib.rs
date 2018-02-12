@@ -1,5 +1,6 @@
 #![allow(dead_code,unused_imports,unused_variables,unused_mut,unused_assignments)]
 
+#[macro_use(to_sql_checked)]
 extern crate postgres;
 extern crate slippy_map_tiles;
 extern crate yaml_rust;
@@ -31,6 +32,7 @@ use yaml_rust::{YamlLoader, Yaml};
 
 use postgres::{Connection, TlsMode};
 use postgres::params::ConnectParams;
+use postgres::types::{Type, ToSql, IsNull};
 
 use slippy_map_tiles::{BBox, Metatile, MetatilesIterator};
 
@@ -96,6 +98,63 @@ impl ConnectionPool {
 }
 
 #[derive(Clone,Debug)]
+struct TableSQL {
+    query: String,
+    has_pixel_width: bool,
+    has_pixel_height: bool,
+    has_scale_denominator: bool,
+        
+}
+
+impl TableSQL {
+    fn new(query: String) -> Self {
+        let has_pixel_width = query.contains("!pixel_width!");
+        let has_pixel_height = query.contains("!pixel_height!");
+        let has_scale_denominator = query.contains("!scale_denominator!");
+
+        let mut query = query;
+
+        query = query.replace("!bbox!", "$1");
+
+        let mut param_num = 2;
+        if has_pixel_width {
+            query = query.replace("!pixel_width!", &format!("${}", param_num));
+            param_num += 1;
+        }
+        if has_pixel_height {
+            query = query.replace("!pixel_height!", &format!("${}", param_num));
+            param_num += 1;
+        }
+        if has_scale_denominator {
+            query = query.replace("!scale_denominator!", &format!("${}", param_num));
+            param_num += 1;
+        }
+                
+        let query = format!("SELECT ST_AsBinary(way), * from {} where way && $1", query);
+        TableSQL{
+            query, has_pixel_width, has_pixel_height, has_scale_denominator,
+        }
+    }
+
+    fn params<'a, T: num_traits::Float+Into<f64>+'a+std::fmt::Debug>(&self, bbox: &'a LocalBBox<T>, pixel_width: &'a f32, pixel_height: &'a f32, scale_denominator: &'a f32) -> Vec<&'a postgres::types::ToSql> {
+        // we always have bbox
+        let mut results: Vec<&postgres::types::ToSql> = Vec::with_capacity(4);
+        results.push(bbox);    // bbox
+        if self.has_pixel_width {
+            results.push(pixel_width);
+        }
+        if self.has_pixel_height {
+            results.push(pixel_height);
+        }
+        if self.has_scale_denominator {
+            results.push(scale_denominator);
+        }
+
+        results
+    }
+}
+
+#[derive(Clone,Debug)]
 pub struct Layers {
     layers: Vec<Layer>,
     global_maxzoom: u8,
@@ -108,7 +167,7 @@ struct Layer {
     maxzoom: u8,
     buffer: u16,
     id: String,
-    table: String,
+    table: TableSQL,
     dbname: Option<String>,
 }
 
@@ -138,22 +197,22 @@ impl Layers {
                 )
                 .unwrap_or(false)
             )
-            .map(|layer| Layer{
-                id: layer["id"].as_str().unwrap().to_owned(),
-                dbname: layer["Datasource"]["dbname"].as_str().map(|x| x.to_owned()),
-                minzoom: layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(global_minzoom) as u8,
-                maxzoom: layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(global_maxzoom) as u8,
-                buffer: layer["properties"]["buffer-size"].as_i64().map(|x| x as u16).unwrap_or(0) as u16,
-                table: layer["Datasource"]["table"].as_str().unwrap().to_owned(),
+            .map(|layer| {
+                let table = layer["Datasource"]["table"].as_str().unwrap();
+                let table = TableSQL::new(table.to_owned());
+                
+                Layer {
+                    id: layer["id"].as_str().unwrap().to_owned(),
+                    dbname: layer["Datasource"]["dbname"].as_str().map(|x| x.to_owned()),
+                    minzoom: layer["properties"]["minzoom"].as_i64().map(|x| x as u8).unwrap_or(global_minzoom) as u8,
+                    maxzoom: layer["properties"]["maxzoom"].as_i64().map(|x| x as u8).unwrap_or(global_maxzoom) as u8,
+                    buffer: layer["properties"]["buffer-size"].as_i64().map(|x| x as u16).unwrap_or(0) as u16,
+                    table: table,
+                }
             })
-            // TODO finish this thing
-            //.map(|layer| {
-            //    layer["Datasource"]["table"].as_str().unwrap()
-            //        .replace("!bbox!", "$1")
-            //        .replace("!pixel_width!", "$2").replace("!pixel_height!", "$3")
-            //        .replace("!scale_denominator!", "$4");
-            //    layer
-            //})
+            .map(|layer| {
+                layer
+            })
             .collect();
 
         Layers{ layers: layers, global_minzoom: global_minzoom, global_maxzoom: global_maxzoom }
@@ -199,27 +258,27 @@ fn duration_to_float_secs(dur: &std::time::Duration) -> f64 {
     (dur.as_secs() as f64) + (dur.subsec_nanos() as f64 / 1e9)
 }
 
-fn scale_denominator_for_zoom(zoom: u8) -> &'static str {
+fn scale_denominator_for_zoom(zoom: u8) -> f32 {
     match zoom {
-        0 => "250000000000",
-        1 => "500000000",
-        2 => "200000000",
-        3 => "100000000",
-        4 => "50000000",
-        5 => "25000000",
-        6 => "12500000",
-        7 => "6500000",
-        8 => "3000000",
-        9 => "1500000",
-        10 => "750000",
-        11 => "400000",
-        12 => "200000",
-        13 => "100000",
-        14 => "50000",
-        15 => "25000",
-        16 => "12500",
-        17 => "5000",
-        18 => "2500",
+        0 => 250000000000.,
+        1 => 500000000.,
+        2 => 200000000.,
+        3 => 100000000.,
+        4 => 50000000.,
+        5 => 25000000.,
+        6 => 12500000.,
+        7 => 6500000.,
+        8 => 3000000.,
+        9 => 1500000.,
+        10 => 750000.,
+        11 => 400000.,
+        12 => 200000.,
+        13 => 100000.,
+        14 => 50000.,
+        15 => 25000.,
+        16 => 12500.,
+        17 => 5000.,
+        18 => 2500.,
         _ => {
             eprintln!("Unsupported zoom ({})", zoom);
             unimplemented!();
@@ -383,14 +442,9 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(St
 
     let conn = connection_pool.connection_for_layer(&layer_name);
     
-    let table = &layer.table;
-    let table = table
-        .replace("!pixel_width!", "0").replace("!pixel_height!","0")
-        .replace("!bbox!", "ST_Point(0, 0)")
-        .replace("!scale_denominator!", "0");
-
-    let query = format!("SELECT * from {table} LIMIT 0", table=table);
-    let res = conn.query(&query, &[]).unwrap();
+    let bbox = LocalBBox(0., 0., 0., 0.);
+    //println!("\n\nlayer.table {:?}\nparam {:?}\n", layer.table, layer.table.params(&bbox, &0., &0., &0.));
+    let res = conn.query(&layer.table.query, &layer.table.params(&bbox, &0., &0., &0.)).unwrap();
 
     res.columns().iter().filter(|c| c.name() != "way")
         .filter_map(|column| {
@@ -408,6 +462,8 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(St
                 
                 // why is there unknown?
                 "unknown" => None,
+                // Should this be Vec<u8>??
+                "bytea" => None,
                 x => {
                     eprintln!("Postgres type {:?} not known for layer {:?}", x, layer);
                     unimplemented!()
@@ -467,20 +523,15 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         let maxx = ur.0 as f64;
         let maxy = ur.1 as f64;
 
-        let bbox = format!("ST_SetSRID(ST_MakeBox2D(ST_Point({llx}, {lly}), ST_Point({urx}, {ury})), 3857)", llx=(minx-buffer_width), lly=(miny-buffer_height), urx=(maxx+buffer_width), ury=(maxy+buffer_height));
+        let bbox = LocalBBox(minx-buffer_width, miny-buffer_height, maxx+buffer_width, maxy+buffer_height);
         assert!(tile_height > 0.);
         assert!(tile_width > 0.);
 
-        let pixel_width = format!("{}", tile_width / canvas_size);
-        let pixel_height = format!("{}", tile_height / canvas_size);
+        let pixel_width = (tile_width / canvas_size) as f32;
+        let pixel_height = (tile_height / canvas_size) as f32;
 
-        // Would it be faster to have a prepared statement which we then execute many times,
-        // with these !params! being $1 etc?
-        // TODO use prepared statements
-        let table = table.replace("!pixel_width!", &pixel_width).replace("!pixel_height!", &pixel_height).replace("!bbox!", &bbox).replace("!scale_denominator!", scale_denominator_for_zoom(metatile.zoom()));
-
-        let query = format!("SELECT ST_AsBinary(way), * from {table} where way && {bbox}", table=table, bbox=bbox);
-        let res = conn.query(&query, &[]).unwrap();
+        let scale_denom = scale_denominator_for_zoom(metatile.zoom());
+        let res = conn.query(&table.query, &table.params(&bbox, &pixel_width, &pixel_height, &scale_denom)).unwrap();
 
         if res.is_empty() {
             continue;
@@ -916,4 +967,33 @@ fn print_geom_as_geojson<T: CoordinateType+Into<f64>>(geom: &Geometry<T>, extent
         _ => unimplemented!(),
     }
     println!("]}}\n");
+}
+
+#[derive(Debug)]
+struct LocalBBox<T: num_traits::Float+Into<f64>>(T, T, T, T);
+//let bbox = format!("ST_SetSRID(ST_MakeBox2D(ST_Point({llx}, {lly}), ST_Point({urx}, {ury})), 3857)", llx=(minx-buffer_width), lly=(miny-buffer_height), urx=(maxx+buffer_width), ury=(maxy+buffer_height));
+
+impl<T: num_traits::Float+Into<f64>+std::fmt::Debug> ToSql for LocalBBox<T> {
+    fn accepts(ty: &Type) -> bool {
+        ty.name() == "geometry"
+    }
+
+    fn to_sql(&self, ty: &Type, mut out: &mut Vec<u8>) -> Result<IsNull, Box<::std::error::Error+Sync+Send>> {
+        let minx = self.0.into();
+        let miny = self.1.into();
+        let maxx = self.2.into();
+        let maxy = self.3.into();
+        // a--b
+        // |  |
+        // d--c
+        let a = Point::new(minx, miny);
+        let b = Point::new(maxx, miny);
+        let c = Point::new(maxx, maxy);
+        let d = Point::new(minx, maxy);
+        let polygon: Geometry<f64> = Polygon::new(vec![a, b, c, d, a].into(), vec![]).into();
+        wkb::write_geom_to_wkb(&polygon, &mut out);
+        Ok(IsNull::No)
+    }
+
+    to_sql_checked!();
 }
