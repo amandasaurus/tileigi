@@ -531,7 +531,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         let pixel_height = (tile_height / canvas_size) as f32;
 
         let scale_denom = scale_denominator_for_zoom(metatile.zoom());
-        let res = conn.query(&table.query, &table.params(&bbox, &pixel_width, &pixel_height, &scale_denom)).unwrap();
+        let stmt = conn.prepare_cached(&layer.table.query).unwrap();
+        let res = stmt.query(&table.params(&bbox, &pixel_width, &pixel_height, &scale_denom)).unwrap();
 
         if res.is_empty() {
             continue;
