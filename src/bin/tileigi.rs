@@ -2,13 +2,13 @@ extern crate slippy_map_tiles;
 #[macro_use]
 extern crate clap;
 
-extern crate tilegen;
+extern crate tileigi;
 
 use std::path::PathBuf;
 use clap::{Arg, App, AppSettings, ArgGroup};
 use slippy_map_tiles::BBox;
 
-use tilegen::*;
+use tileigi::*;
 
 fn main() {
 

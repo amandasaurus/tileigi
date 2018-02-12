@@ -1,5 +1,5 @@
 [package]
-name = "tilegen"
+name = "tileigi"
 version = "0.2.0"
 authors = ["Rory McCann <rory@technomancy.org>"]
 
