@@ -52,7 +52,7 @@ pub fn printer(rx: Receiver<PrinterMessage>) {
         }
 
         let duration = duration_to_float_secs(&start.elapsed());
-        write!(stdout, "\r[{:>6}s] z{:>2}, {:4} metatile(s) ({:9.4} metatiles/s, {:9.4} tiles/s, {:5} tiles in last s)", start.elapsed().as_secs(), current_zoom, num_metatiles_done, (num_metatiles_done as f64)/duration, (num_tiles_done as f64)/duration, num_this_sec).ok();
+        write!(stdout, "\r[{:>6}s] z{:>2}, {:4} tiles ({:9.4} tiles/s, {:9.4} metatiles/s, last sec: {:5} tiles)", start.elapsed().as_secs(), current_zoom, num_tiles_done, (num_tiles_done as f64)/duration, (num_metatiles_done as f64)/duration, num_this_sec).ok();
         stdout.flush().ok();
 
         if should_quit {
@@ -63,5 +63,5 @@ pub fn printer(rx: Receiver<PrinterMessage>) {
     }
 
     let duration = duration_to_float_secs(&start.elapsed());
-    println!("\nFinished. {} metatiles ({} tiles), done in {} ({:9.4} metatiles/sec, {:9.4} tiles/sec)", num_metatiles_done, num_tiles_done, fmt_duration(&start.elapsed()), (num_metatiles_done as f64)/duration, (num_tiles_done as f64)/duration );
+    println!("\nFinished. {} tiles ({} metatiles), done in {} ({:9.4} metatiles/sec, {:9.4} tiles/sec)", num_tiles_done, num_metatiles_done, fmt_duration(&start.elapsed()), (num_metatiles_done as f64)/duration, (num_tiles_done as f64)/duration );
 }

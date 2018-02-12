@@ -362,7 +362,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     printer_thread.join().unwrap();
     fileio_tx.send(FileIOMessage::Quit).unwrap();
 
-    println!("All tiles generated. Finishing writing them to disk...");
+    println!("All tiles generated. Waiting for all to be written to disk...");
 
     fileio_thread.join().unwrap();
 
@@ -390,10 +390,11 @@ fn worker<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<
 
 
         let tiles: Vec<_> = tiles.into_iter().map(|(tile, mvt)| (tile, mvt.to_compressed_bytes())).collect();
+        let num_tiles = tiles.len();
 
         fileio_tx.send(FileIOMessage::SaveMetaTile(metatile.clone(), tiles)).unwrap();
 
-        printer_tx.send(printer::PrinterMessage::DoneTiles(metatile.zoom(), 1, metatile.scale().pow(2) as usize)).unwrap();
+        printer_tx.send(printer::PrinterMessage::DoneTiles(metatile.zoom(), 1, num_tiles)).unwrap();
 
     }
 
