@@ -39,6 +39,8 @@ fn main() {
         .arg(Arg::with_name("metatile-scale").long("metatile-scale").default_value("8").value_name("NUMBER").help("Size of metatile to use (8x8 default)"))
         .arg(Arg::with_name("threads").long("threads").default_value("1").value_name("NUBMER").help("Number of concurrent generation threads to run"))
 
+        .arg(Arg::with_name("iter_mode").long("mode").default_value("tile-then-layer").possible_values(&["tile-then-layer", "layer-then-tile"]))
+
         .arg(Arg::with_name("if_not_exists").long("if-not-exists").help("Do not generate a tile if the file already exists. Doesn't work with mbtiles (yet)"))
         .arg(Arg::with_name("no_compress").long("no-compress").help("Do not compress the pbf files"))
         .get_matches();
@@ -84,5 +86,13 @@ fn main() {
         },
     };
 
-    generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads);
+    match matches.value_of("iter_mode") {
+        Some("tile-then-layer") => {
+            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads);
+        },
+        Some("layer-then-tile") => {
+            generate_by_layer(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads);
+        },
+        _ => panic!(),
+    }
 }
