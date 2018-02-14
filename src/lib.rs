@@ -821,7 +821,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
             }).collect();
         geoms.reverse();
 
-        let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>| {
+        let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>, properties: mapbox_vector_tile::Properties| {
 
             let i = (tile.x() - metatile.x()) as i32;
             let j = (tile.y() - metatile.y()) as i32;
@@ -830,7 +830,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
 
             //debug_assert!(is_valid(&geom));
 
-            let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
+            let feature = mapbox_vector_tile::Feature::new(geom, properties);
             let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
             let mvt_tile = results.get_mut(i).unwrap();
             mvt_tile.add_feature(feature);
@@ -843,19 +843,16 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
         //
         // We want to do this in order, so we reverse the vec, and the pop from the end
         // (which is the original front).
-        // TODO rather than filtering out invalid geoms here, prevent the clipping code from
-        // generating invalid geoms in the first place
-        // One error was creating a linestring with 2 points, both the same
         loop {
             if geoms.len() <= 1 { break; }
             if let Some((tile, geom)) = geoms.pop() {
-                save_single_tile(tile, geom);
+                save_single_tile(tile, geom, properties.clone());
             }
         }
 
         //if geoms.is_empty() { return results; }
         if let Some((tile, geom)) = geoms.pop() {
-            save_single_tile(tile, geom);
+            save_single_tile(tile, geom, properties);
         }
 
     }
