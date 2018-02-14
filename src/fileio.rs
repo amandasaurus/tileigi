@@ -20,8 +20,7 @@ pub enum FileIOMessage {
 
     SaveMetaTile(slippy_map_tiles::Metatile, Vec<(slippy_map_tiles::Tile, Vec<u8>)>),
 
-    // For when we do per layer tiles
-    // AppendToTile(slippy_map_tiles::Tile, Vec<u8>),
+    AppendToTile(slippy_map_tiles::Tile, Vec<u8>),
     // EnsureAllCompressed,
 }
 
@@ -36,6 +35,9 @@ pub fn fileio_thread<D: TileDestination+Sized>(rx: Receiver<FileIOMessage>, mut 
             },
             FileIOMessage::SaveMetaTile(metatile, tiles) => {
                 dest.save_metatile(metatile, tiles);
+            },
+            FileIOMessage::AppendToTile(tile, bytes) => {
+                dest.append_bytes_to_tile(tile, bytes);
             },
         }
     }
@@ -61,6 +63,10 @@ pub trait TileDestination {
     }
 
     fn does_tile_exist(dest: &PathBuf, tile: &slippy_map_tiles::Tile) -> bool;
+
+    fn append_bytes_to_tile(&mut self, tile: slippy_map_tiles::Tile, bytes: Vec<u8>) {
+        unimplemented!();
+    }
 }
 
 pub struct TileStashDirectory {
@@ -154,7 +160,31 @@ impl TileDestination for MBTiles {
         false
     }
 
+    fn append_bytes_to_tile(&mut self, tile: slippy_map_tiles::Tile, bytes: Vec<u8>) {
+        let digest = format!("{}/{}/{}", tile.zoom(), tile.x(), tile.y());
+
+        let row: u32 = 2u32.pow(tile.zoom() as u32) - tile.y() - 1;
+
+        let num_changed = self.conn.execute(
+            "INSERT OR IGNORE INTO map (zoom_level, tile_column, tile_row, tile_id) VALUES (?1, ?2, ?3, ?4);",
+            &[&tile.zoom(), &tile.x(), &row, &digest]
+            ).unwrap();
+
+        if num_changed == 1 {
+            self.conn.execute(
+                "INSERT OR IGNORE INTO images (tile_id, tile_data) VALUES (?1, ?2);",
+                    &[&digest, &bytes]
+                ).unwrap();
+        } else {
+            self.conn.execute(
+                "UPDATE images SET tile_data = tile_data||?1 WHERE tile_id = ?2;",
+                    &[&bytes, &digest]
+                ).unwrap();
+        }
+    }
+
 }
+
 impl MBTiles {
     pub fn set_tilejson_vector_layers(&mut self, vector_layers: serde_json::Value) {
         let vector_layers_string = vector_layers.to_string();
