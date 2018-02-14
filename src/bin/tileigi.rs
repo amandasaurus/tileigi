@@ -26,6 +26,8 @@ fn main() {
         .arg(Arg::with_name("minzoom").long("minzoom").value_name("ZOOM").default_value("0").help("Minimum zoom to generate"))
         .arg(Arg::with_name("maxzoom").long("maxzoom").value_name("ZOOM").default_value("14").help("Maximum zoom to generate"))
 
+        .arg(Arg::with_name("zoom").long("zoom").value_name("ZOOM").conflicts_with_all(&["minzoom", "maxzoom"]).help("Only generate for this zoom"))
+
         .arg(Arg::with_name("bbox").long("bbox").takes_value(true).value_name("MINLON,MINLAT,MAXLON,MAXLAT").help("Only generate tiles inside this bbox. 'planet' for planet, or minlon,minlat,maxlon,maxlat"))
 
         .arg(Arg::with_name("bbox-bottom").long("bbox-bottom").takes_value(true).value_name("DEGREES").help("BBox, bottom"))
@@ -51,8 +53,14 @@ fn main() {
         _ => panic!("Can't provide >1 dest"),
     };
 
-    let minzoom: u8 = matches.value_of("minzoom").unwrap().parse().unwrap();
-    let maxzoom: u8 = matches.value_of("maxzoom").unwrap().parse().unwrap();
+    let (minzoom, maxzoom): (u8, u8) = if let Some(z) = matches.value_of("zoom") {
+        let z: u8 = z.parse().unwrap();
+        (z, z)
+    } else {
+        ( matches.value_of("minzoom").unwrap().parse().unwrap(),
+          matches.value_of("maxzoom").unwrap().parse().unwrap() )
+    };
+
     let if_not_exists = matches.is_present("if_not_exists");
     let compress = ! matches.is_present("no_compress");
     let metatile_scale: u8 = matches.value_of("metatile-scale").unwrap().parse().unwrap();
