@@ -694,7 +694,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
             Err(e) => {
                 // TODO investigate this more
                 //eprintln!("{}:{} Metatile: {:?} WKB reading error {:?}, layer {} row {:?}", file!(), line!(), metatile, e, layer_name, row);
-                return results;
+                continue;
             },
             Ok(g) => g,
         };
@@ -710,12 +710,12 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
         //    println!("\nL {} minx {} maxx {} miny {} maxy {} extent {}", line!(), minx, maxx, miny, maxy, extent);
         //}
         let mut geom = match remap_geometry(geom, minx, maxx, miny, maxy, extent) {
-            None => { return results; }
+            None => { continue; }
             Some(g) => g,
         };
 
         let geom = match simplify::remove_unneeded_points(geom) {
-            None => { return results; },
+            None => { continue; },
             Some(g) => g,
         };
         //if bad_obj { println!("{}:{} geom {:100}", file!(), line!(), format!("{:?}", geom)); }
@@ -735,7 +735,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
         let geom = if metatile.zoom() < global_maxzoom {
                 match simplify::simplify(geom, 8) {
                     None => {
-                        return results;
+                        continue;
                     },
                     Some(g) => g,
                 }
@@ -760,7 +760,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
         let geom = match clip_to_bbox(Cow::Owned(geom), &geo::Bbox{ xmin: -(buffer as i32), xmax: extent as i32 + buffer as i32, ymin: -(buffer as i32), ymax: extent as i32 + buffer as i32 }) {
             None => {
                 // geometry is outside the bbox, so skip
-                return results;
+                continue;
             },
             Some(g) => g,
         };
