@@ -13,7 +13,7 @@ use ::simplify;
 
 use fraction::Fraction;
 
-pub fn is_valid<T: CoordinateType+Signed+Debug+Ord>(geom: &Geometry<T>) -> bool {
+pub fn is_valid(geom: &Geometry<i32>) -> bool {
     match *geom {
         Geometry::LineString(ref ls) => is_linestring_valid(ls),
         Geometry::Polygon(ref p) => is_polygon_valid(p),
@@ -23,7 +23,7 @@ pub fn is_valid<T: CoordinateType+Signed+Debug+Ord>(geom: &Geometry<T>) -> bool 
     }
 }
 
-pub fn is_valid_skip_expensive<T: CoordinateType+Signed+Debug+Ord>(geom: &Geometry<T>) -> bool {
+pub fn is_valid_skip_expensive(geom: &Geometry<i32>) -> bool {
     match *geom {
         Geometry::LineString(ref ls) => is_linestring_valid(ls),
         Geometry::Polygon(ref p) => is_polygon_valid_skip_expensive(p),
@@ -45,7 +45,7 @@ fn is_linestring_valid<T: CoordinateType>(ls: &LineString<T>) -> bool {
     true
 }
 
-pub fn is_polygon_valid<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon<T>) -> bool {
+pub fn is_polygon_valid(p: &Polygon<i32>) -> bool {
     is_polygon_valid_skip_expensive(p) && is_polygon_valid_do_expensive(p)
 }
 
@@ -94,7 +94,7 @@ fn is_polygon_valid_skip_expensive<T: CoordinateType+Signed+Debug+Ord>(p: &Polyg
     true
 }
 
-fn is_polygon_valid_do_expensive<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon<T>) -> bool {
+fn is_polygon_valid_do_expensive(p: &Polygon<i32>) -> bool {
     if has_self_intersections(&p.exterior) {
         return false;
     }
@@ -105,7 +105,7 @@ fn is_polygon_valid_do_expensive<T: CoordinateType+Signed+Debug+Ord>(p: &Polygon
 
     // In theory this is backwards. Ext rings should be CCW, and int rings CW. But in vector tiles
     // the y goes down, so it's flipped.
-    if p.exterior.is_ccw() || p.interiors.iter().any(|i| i.is_cw()) {
+    if is_ccw(&p.exterior) || p.interiors.iter().any(|i| is_cw(i)) {
         return false;
     }
 
@@ -152,21 +152,29 @@ fn num_points_excl_duplicates<T: CoordinateType>(ls: &LineString<T>) -> usize {
 
 }
 
-pub fn ensure_polygon_orientation<T: CoordinateType>(geom: &mut Geometry<T>) {
+pub fn ensure_polygon_orientation(geom: &mut Geometry<i32>) {
     match *geom {
         Geometry::Polygon(ref mut p) => {
             // Y goes positive down, ergo the winding order is 'wrong way around' since the winding
             // order code works with y up
-            p.exterior.make_cw_winding();
+            if !is_cw(&p.exterior) {
+                p.exterior.0.reverse();
+            }
             for i in p.interiors.iter_mut() {
-                i.make_ccw_winding();
+                if !is_ccw(i) {
+                    i.0.reverse();
+                }
             }
         },
         Geometry::MultiPolygon(ref mut mp) => {
             for p in mp.0.iter_mut() {
-                p.exterior.make_cw_winding();
+                if !is_cw(&p.exterior) {
+                    p.exterior.0.reverse();
+                }
                 for i in p.interiors.iter_mut() {
-                    i.make_ccw_winding();
+                    if !is_ccw(i) {
+                        i.0.reverse();
+                    }
                 }
             }
         },
@@ -1086,6 +1094,22 @@ fn order_points<T: CoordinateType+Debug+Sub<Output=T>+Ord>(line: ((T, T), (T, T)
         //unreachable!();
     }
 
+}
+
+fn twice_linestring_area(ls: &LineString<i32>) -> i32 {
+    ls.0.windows(2).map(|points| {
+        let (x1, y1) = (points[0].x() as i64, points[0].y() as i64);
+        let (x2, y2) = (points[1].x() as i64, points[1].y() as i64);
+        x1*y2 - x2*y1
+    }).sum::<i64>() as i32
+}
+
+fn is_cw(ls: &LineString<i32>) -> bool {
+    twice_linestring_area(ls) < 0
+}
+
+fn is_ccw(ls: &LineString<i32>) -> bool {
+    twice_linestring_area(ls) > 0
 }
 
 
