@@ -490,251 +490,18 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         let minzoom = layer.minzoom;
         let maxzoom = layer.maxzoom;
         let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
-
         // Skip layers which are not on this zoom
         if metatile.zoom() < minzoom || metatile.zoom() > maxzoom {
             continue;
         }
 
-        // One 'pixel' of buffer space is actually 16 pixels of space now
-        let buffer = (layer.buffer as i32) * 16;
-
-        let layer_name = &layer.id;
-
-        let conn = connection_pool.connection_for_layer(&layer_name);
-        
-        let table = &layer.table;
-        // TODO should this be 4096??
-        // TODO not confident about this calculation.
-        let canvas_size = 256.*(metatile.size() as f64);
-        let ll = metatile.sw_corner().to_3857();
-        let ur = metatile.ne_corner().to_3857();
-
-        // TODO vtiles have y positive going down, is this correct??
-        let tile_width = (ur.0 - ll.0) as f64;
-        let tile_height = (ur.1 - ll.1) as f64;
-
-        // calculate how much to expand the bbox to get the buffer.
-        // Similar calculation for the pixel size
-        let buffer_width = (tile_width / canvas_size)*(buffer as f64);
-        let buffer_height = (tile_height / canvas_size)*(buffer as f64);
-
-        let minx = ll.0 as f64;
-        let miny = ll.1 as f64;
-        let maxx = ur.0 as f64;
-        let maxy = ur.1 as f64;
-
-        let bbox = LocalBBox(minx-buffer_width, miny-buffer_height, maxx+buffer_width, maxy+buffer_height);
-        assert!(tile_height > 0.);
-        assert!(tile_width > 0.);
-
-        let pixel_width = (tile_width / canvas_size) as f32;
-        let pixel_height = (tile_height / canvas_size) as f32;
-
-        let scale_denom = scale_denominator_for_zoom(metatile.zoom());
-        let stmt = conn.prepare_cached(&layer.table.query).unwrap();
-        let res = stmt.query(&table.params(&bbox, &pixel_width, &pixel_height, &scale_denom)).unwrap();
-
-        if res.is_empty() {
-            continue;
+        let mvt_layers = single_layer(layer, layers.global_maxzoom, metatile, connection_pool);
+        for (mvt_tile, mvt_layer) in results.iter_mut().zip(mvt_layers.into_iter()) {
+            mvt_tile.add_layer(mvt_layer);
         }
 
-        // Ensure all tiles in this metatile have this layer
-        let new_layer = mapbox_vector_tile::Layer::new(layer_name.to_string());
-        for mvt in results.iter_mut() {
-            mvt.add_layer(new_layer.clone());
-        }
-
-        let extent = (new_layer.extent as f64)*(metatile.size() as f64);
-
-        let columns: Vec<_> = res.columns().iter().skip(1).filter(|c| c.name() != "way").collect();
-
-        let mut res = res.iter().enumerate();
-
-        let mut num_objects = 0;
-
-        for (i, row) in res {
-            num_objects += 1;
-            let bad_obj = false && metatile.zoom() == 3 && i == 4_579;
-
-            // First object is the ST_AsBinary
-            // TODO Does this do any copies that we don't want?
-            let wkb_bytes: Vec<u8> = row.get(0);
-
-            //println!("\nL {} bytes {:?}", line!(), wkb_bytes);
-
-            let geom: geo::Geometry<f64> = match wkb::wkb_to_geom(&mut wkb_bytes.as_slice()) {
-                Err(e) => {
-                    // TODO investigate this more
-                    //eprintln!("{}:{} Metatile: {:?} WKB reading error {:?}, layer {} row {:?}", file!(), line!(), metatile, e, layer_name, row);
-                    continue;
-                },
-                Ok(g) => g,
-            };
-
-            // TODO not sure about this
-            let pixel_size: f64 = tile_width/extent;
-
-            // TODO there are a lot of calls to `is_valid`, which is computationally expensive, but
-            // removing them makes it slower, probably because of the lots of invalid geoms
-
-            //if bad_obj {
-            //    println!("\nL {} geom {:100}", line!(), format!("{:?}", geom));
-            //    println!("\nL {} minx {} maxx {} miny {} maxy {} extent {}", line!(), minx, maxx, miny, maxy, extent);
-            //}
-            let mut geom = match remap_geometry(geom, minx, maxx, miny, maxy, extent) {
-                None => { continue; }
-                Some(g) => g,
-            };
-
-            let geom = match simplify::remove_unneeded_points(geom) {
-                None => { continue; },
-                Some(g) => g,
-            };
-            //if bad_obj { println!("{}:{} geom {:100}", file!(), line!(), format!("{:?}", geom)); }
-
-            //let geom = validity::make_valid(geom);
-
-            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:100}", line!(), format!("{:?}", geom));
-            //validity::ensure_polygon_orientation(&mut geom);
-            //if ! is_valid_skip_expensive(&geom) {
-            //    continue;
-            //}
-
-            // Only do the simplification if we're not at maxzoom. We've already removed extra
-            //
-            // points in remove_unneeded_points above
-            //println!("{} L {}", file!(), line!());
-            let geom = if metatile.zoom() < layers.global_maxzoom {
-                    match simplify::simplify(geom, 8) {
-                        None => {
-                            continue;
-                        },
-                        Some(g) => g,
-                    }
-            } else { geom };
-            //println!("{} L {}", file!(), line!());
-            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:100}", line!(), format!("{:?}", geom));
-            //if bad_obj { println!("{}:{} geom {:102}", file!(), line!(), format!("{:?}", geom)); }
-            //if bad_obj {
-            //    let mut g2 = geom.clone();
-            //    validity::ensure_polygon_orientation(&mut g2);
-            //    print_geom_as_geojson(&g2, 4096.*8.);
-            //}
-            
-            // After simplifying a geometry, it's possible it becomes invalid. So we just skip the
-            // geometries in that case.
-            //if ! is_valid(&geom) {
-            //    continue;
-            //}
-
-            // clip geometry, so no part of it goes outside the bbox. PostgreSQL will return
-            // anything that overlaps.
-            let geom = match clip_to_bbox(Cow::Owned(geom), &geo::Bbox{ xmin: -(buffer as i32), xmax: extent as i32 + buffer as i32, ymin: -(buffer as i32), ymax: extent as i32 + buffer as i32 }) {
-                None => {
-                    // geometry is outside the bbox, so skip
-                    continue;
-                },
-                Some(g) => g,
-            };
-
-            //let geom = validity::make_valid(geom);
-            //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:100}", line!(), format!("{:?}", geom));
-                    
-            let mut properties = mapbox_vector_tile::Properties::new();
-
-            for column in columns.iter() {
-                let name = column.name();
-
-                // Sometimes a NULL value can be returned, hence the dance with Option<Value>
-                let value: Option<mapbox_vector_tile::Value> = match column.type_().name() {
-                    "float4" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Float)).unwrap_or(None),
-                    "float8" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Double)).unwrap_or(None),
-                    "text" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::String)).unwrap_or(None),
-                    "varchar" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::String)).unwrap_or(None),
-                    "int4" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i32 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
-                    "int8" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i64 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
-                    
-                    // TODO not 100% sure numeric is correct here
-                    "numeric" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Double)).unwrap_or(None),
-                    
-                    // why is there unknown?
-                    "unknown" => None,
-                    x => {
-                        eprintln!("Postgres type {:?} not known", x);
-                        unimplemented!()
-                    },
-                };
-
-
-                if let Some(v) = value {
-                    properties.insert(name, v);
-                }
-            }
-
-            let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
-                |(t, g)| match g {
-                    // TODO probably could use .map/.and_then here
-                    Some(mut g) => {
-                        //debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
-
-                        match validity::make_valid(g) {
-                            None => None,
-                            Some(mut g) => {
-                                if is_valid(&g) {
-                                    validity::ensure_polygon_orientation(&mut g);
-                                    Some((t, g))
-                                } else {
-                                    None
-                                }
-                            },
-                        }
-                    },
-                    None => None,
-                }).collect();
-            geoms.reverse();
-
-            let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>| {
-
-                let i = (tile.x() - metatile.x()) as i32;
-                let j = (tile.y() - metatile.y()) as i32;
-
-                geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
-
-                //debug_assert!(is_valid(&geom));
-
-                let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
-                let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
-                let mvt_tile = results.get_mut(i).unwrap();
-                mvt_tile.add_feature(&layer_name, feature);
-
-            };
-
-            // In cases where there is only one geometry here, we don't want to clone the
-            // `properties`, and instead move it. If there are N geometries, we want to do N-1
-            // clones, and 1 move. Hence the duplication with the loop.
-            //
-            // We want to do this in order, so we reverse the vec, and the pop from the end
-            // (which is the original front).
-            // TODO rather than filtering out invalid geoms here, prevent the clipping code from
-            // generating invalid geoms in the first place
-            // One error was creating a linestring with 2 points, both the same
-            loop {
-                if geoms.len() <= 1 { break; }
-                if let Some((tile, geom)) = geoms.pop() {
-                    save_single_tile(tile, geom);
-                }
-            }
-
-            if geoms.is_empty() { continue; }
-            if let Some((tile, geom)) = geoms.pop() {
-                save_single_tile(tile, geom);
-            }
-
-        }
-
-        
     }
+
 
     results.into_iter().enumerate().map(|(i, mvt_tile)| {
         let i = i as u32;
@@ -742,6 +509,248 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         let y = i % scale + metatile.y();
         (slippy_map_tiles::Tile::new(metatile.zoom(), x, y).unwrap(), mvt_tile)
     }).collect()
+}
+
+fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool) -> Vec<mapbox_vector_tile::Layer> {
+    let scale = metatile.size() as u32;
+    let layer_name = &layer.id;
+
+    let new_layer = mapbox_vector_tile::Layer::new(layer_name.to_string());
+    let mut results: Vec<mapbox_vector_tile::Layer> = vec![mapbox_vector_tile::Layer::new(layer_name.to_string()); (scale*scale) as usize];
+
+    // One 'pixel' of buffer space is actually 16 pixels of space now
+    let buffer = (layer.buffer as i32) * 16;
+
+    let layer_name = &layer.id;
+
+    let conn = connection_pool.connection_for_layer(&layer_name);
+    
+    let table = &layer.table;
+    // TODO should this be 4096??
+    // TODO not confident about this calculation.
+    let canvas_size = 256.*(metatile.size() as f64);
+    let ll = metatile.sw_corner().to_3857();
+    let ur = metatile.ne_corner().to_3857();
+
+    // TODO vtiles have y positive going down, is this correct??
+    let tile_width = (ur.0 - ll.0) as f64;
+    let tile_height = (ur.1 - ll.1) as f64;
+
+    // calculate how much to expand the bbox to get the buffer.
+    // Similar calculation for the pixel size
+    let buffer_width = (tile_width / canvas_size)*(buffer as f64);
+    let buffer_height = (tile_height / canvas_size)*(buffer as f64);
+
+    let minx = ll.0 as f64;
+    let miny = ll.1 as f64;
+    let maxx = ur.0 as f64;
+    let maxy = ur.1 as f64;
+
+    let bbox = LocalBBox(minx-buffer_width, miny-buffer_height, maxx+buffer_width, maxy+buffer_height);
+    assert!(tile_height > 0.);
+    assert!(tile_width > 0.);
+
+    let pixel_width = (tile_width / canvas_size) as f32;
+    let pixel_height = (tile_height / canvas_size) as f32;
+
+    let scale_denom = scale_denominator_for_zoom(metatile.zoom());
+    let stmt = conn.prepare_cached(&layer.table.query).unwrap();
+    let res = stmt.query(&table.params(&bbox, &pixel_width, &pixel_height, &scale_denom)).unwrap();
+
+    if res.is_empty() {
+        return results;
+    }
+
+
+    let extent = (new_layer.extent as f64)*(metatile.size() as f64);
+
+    let columns: Vec<_> = res.columns().iter().skip(1).filter(|c| c.name() != "way").collect();
+
+    let mut res = res.iter().enumerate();
+
+    let mut num_objects = 0;
+
+    for (i, row) in res {
+        num_objects += 1;
+        let bad_obj = false && metatile.zoom() == 3 && i == 4_579;
+
+        // First object is the ST_AsBinary
+        // TODO Does this do any copies that we don't want?
+        let wkb_bytes: Vec<u8> = row.get(0);
+
+        //println!("\nL {} bytes {:?}", line!(), wkb_bytes);
+
+        let geom: geo::Geometry<f64> = match wkb::wkb_to_geom(&mut wkb_bytes.as_slice()) {
+            Err(e) => {
+                // TODO investigate this more
+                //eprintln!("{}:{} Metatile: {:?} WKB reading error {:?}, layer {} row {:?}", file!(), line!(), metatile, e, layer_name, row);
+                return results;
+            },
+            Ok(g) => g,
+        };
+
+        // TODO not sure about this
+        let pixel_size: f64 = tile_width/extent;
+
+        // TODO there are a lot of calls to `is_valid`, which is computationally expensive, but
+        // removing them makes it slower, probably because of the lots of invalid geoms
+
+        //if bad_obj {
+        //    println!("\nL {} geom {:100}", line!(), format!("{:?}", geom));
+        //    println!("\nL {} minx {} maxx {} miny {} maxy {} extent {}", line!(), minx, maxx, miny, maxy, extent);
+        //}
+        let mut geom = match remap_geometry(geom, minx, maxx, miny, maxy, extent) {
+            None => { return results; }
+            Some(g) => g,
+        };
+
+        let geom = match simplify::remove_unneeded_points(geom) {
+            None => { return results; },
+            Some(g) => g,
+        };
+        //if bad_obj { println!("{}:{} geom {:100}", file!(), line!(), format!("{:?}", geom)); }
+
+        //let geom = validity::make_valid(geom);
+
+        //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:100}", line!(), format!("{:?}", geom));
+        //validity::ensure_polygon_orientation(&mut geom);
+        //if ! is_valid_skip_expensive(&geom) {
+        //    continue;
+        //}
+
+        // Only do the simplification if we're not at maxzoom. We've already removed extra
+        //
+        // points in remove_unneeded_points above
+        //println!("{} L {}", file!(), line!());
+        let geom = if metatile.zoom() < global_maxzoom {
+                match simplify::simplify(geom, 8) {
+                    None => {
+                        return results;
+                    },
+                    Some(g) => g,
+                }
+        } else { geom };
+        //println!("{} L {}", file!(), line!());
+        //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:100}", line!(), format!("{:?}", geom));
+        //if bad_obj { println!("{}:{} geom {:102}", file!(), line!(), format!("{:?}", geom)); }
+        //if bad_obj {
+        //    let mut g2 = geom.clone();
+        //    validity::ensure_polygon_orientation(&mut g2);
+        //    print_geom_as_geojson(&g2, 4096.*8.);
+        //}
+        
+        // After simplifying a geometry, it's possible it becomes invalid. So we just skip the
+        // geometries in that case.
+        //if ! is_valid(&geom) {
+        //    continue;
+        //}
+
+        // clip geometry, so no part of it goes outside the bbox. PostgreSQL will return
+        // anything that overlaps.
+        let geom = match clip_to_bbox(Cow::Owned(geom), &geo::Bbox{ xmin: -(buffer as i32), xmax: extent as i32 + buffer as i32, ymin: -(buffer as i32), ymax: extent as i32 + buffer as i32 }) {
+            None => {
+                // geometry is outside the bbox, so skip
+                return results;
+            },
+            Some(g) => g,
+        };
+
+        //let geom = validity::make_valid(geom);
+        //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after clip_to_bbox: {:100}", line!(), format!("{:?}", geom));
+                
+        let mut properties = mapbox_vector_tile::Properties::new();
+
+        for column in columns.iter() {
+            let name = column.name();
+
+            // Sometimes a NULL value can be returned, hence the dance with Option<Value>
+            let value: Option<mapbox_vector_tile::Value> = match column.type_().name() {
+                "float4" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Float)).unwrap_or(None),
+                "float8" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Double)).unwrap_or(None),
+                "text" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::String)).unwrap_or(None),
+                "varchar" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::String)).unwrap_or(None),
+                "int4" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i32 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
+                "int8" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i64 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
+                
+                // TODO not 100% sure numeric is correct here
+                "numeric" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Double)).unwrap_or(None),
+                
+                // why is there unknown?
+                "unknown" => None,
+                x => {
+                    eprintln!("Postgres type {:?} not known", x);
+                    unimplemented!()
+                },
+            };
+
+
+            if let Some(v) = value {
+                properties.insert(name, v);
+            }
+        }
+
+        let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
+            |(t, g)| match g {
+                // TODO probably could use .map/.and_then here
+                Some(mut g) => {
+                    //debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
+
+                    match validity::make_valid(g) {
+                        None => None,
+                        Some(mut g) => {
+                            if is_valid(&g) {
+                                validity::ensure_polygon_orientation(&mut g);
+                                Some((t, g))
+                            } else {
+                                None
+                            }
+                        },
+                    }
+                },
+                None => None,
+            }).collect();
+        geoms.reverse();
+
+        let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>| {
+
+            let i = (tile.x() - metatile.x()) as i32;
+            let j = (tile.y() - metatile.y()) as i32;
+
+            geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
+
+            //debug_assert!(is_valid(&geom));
+
+            let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
+            let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
+            let mvt_tile = results.get_mut(i).unwrap();
+            mvt_tile.add_feature(feature);
+
+        };
+
+        // In cases where there is only one geometry here, we don't want to clone the
+        // `properties`, and instead move it. If there are N geometries, we want to do N-1
+        // clones, and 1 move. Hence the duplication with the loop.
+        //
+        // We want to do this in order, so we reverse the vec, and the pop from the end
+        // (which is the original front).
+        // TODO rather than filtering out invalid geoms here, prevent the clipping code from
+        // generating invalid geoms in the first place
+        // One error was creating a linestring with 2 points, both the same
+        loop {
+            if geoms.len() <= 1 { break; }
+            if let Some((tile, geom)) = geoms.pop() {
+                save_single_tile(tile, geom);
+            }
+        }
+
+        //if geoms.is_empty() { return results; }
+        if let Some((tile, geom)) = geoms.pop() {
+            save_single_tile(tile, geom);
+        }
+
+    }
+
+    results
 
 }
 
