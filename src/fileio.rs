@@ -60,7 +60,7 @@ pub trait TileDestination {
         metatile.tiles().iter().all(|t| Self::does_tile_exist(dest, t))
     }
 
-    fn does_tile_exist(dest: &PathBuf, tile: &slippy_map_tiles::Tile) -> bool { false }
+    fn does_tile_exist(dest: &PathBuf, tile: &slippy_map_tiles::Tile) -> bool;
 }
 
 pub struct TileStashDirectory {
@@ -149,6 +149,11 @@ impl TileDestination for MBTiles {
         self.conn.execute("COMMIT;", &[]).unwrap();
     }
 
+    fn does_tile_exist(dest: &PathBuf, tile: &slippy_map_tiles::Tile) -> bool {
+        // Not implemented yet
+        false
+    }
+
 }
 impl MBTiles {
     pub fn set_tilejson_vector_layers(&mut self, vector_layers: serde_json::Value) {
@@ -168,6 +173,11 @@ impl TileDestination for ModTileMetatileDirectory {
     fn new(dest_dir: &PathBuf) -> Self {
         fs::create_dir_all(&dest_dir).unwrap();
         ModTileMetatileDirectory{ dest_dir: dest_dir.clone() }
+    }
+
+    fn does_tile_exist(dest: &PathBuf, tile: &slippy_map_tiles::Tile) -> bool {
+        // Not implemented yet
+        false
     }
 
     fn save_metatile(&mut self, metatile: slippy_map_tiles::Metatile, tiles: Vec<(slippy_map_tiles::Tile, Vec<u8>)>) {
