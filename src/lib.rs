@@ -348,7 +348,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
         };
 
         let handle = thread::spawn(move || {
-            worker(my_printer_tx, my_fileio_tx, my_metatile_iterator, &my_connection_pool, &my_layers, should_do_metatile);
+            worker_all_layers(my_printer_tx, my_fileio_tx, my_metatile_iterator, &my_connection_pool, &my_layers, should_do_metatile);
         });
         workers.push(handle);
     }
@@ -370,7 +370,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
 }
 
-fn worker<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, connection_pool: &ConnectionPool, layers: &Layers, should_do_metatile: F)
+fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, connection_pool: &ConnectionPool, layers: &Layers, should_do_metatile: F)
     where F: Fn(&slippy_map_tiles::Metatile) -> bool,
 {
     loop {
@@ -393,6 +393,116 @@ fn worker<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<
         let num_tiles = tiles.len();
 
         fileio_tx.send(FileIOMessage::SaveMetaTile(metatile.clone(), tiles)).unwrap();
+
+        printer_tx.send(printer::PrinterMessage::DoneTiles(metatile.zoom(), 1, num_tiles)).unwrap();
+
+    }
+
+}
+
+pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize) {
+    let layers = Layers::from_file(filename);
+
+    let connection_pool = ConnectionPool::new(layers.get_all_connections());
+
+    let (fileio_tx, fileio_rx) = sync_channel(1_000_000);
+
+
+    let mut fileio_thread = match dest {
+        &TileDestinationType::TileStashDirectory(ref path) => {
+            let tile_dest = fileio::TileStashDirectory::new(&path);
+            write_tilejson(&layers, &connection_pool, &path);
+            thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
+        },
+        &TileDestinationType::MBTiles(ref path) => {
+            let mut tile_dest = fileio::MBTiles::new(&path);
+            tile_dest.set_tilejson_vector_layers(tilejson_vector_layers(&layers, &connection_pool));
+            thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
+        },
+        &TileDestinationType::ModTileDirectory(ref path) => {
+            write_tilejson(&layers, &connection_pool, &path);
+            let tile_dest = fileio::ModTileMetatileDirectory::new(&path);
+            thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
+        },
+    };
+    let global_maxzoom = layers.global_maxzoom;
+
+    for layer in layers.layers.iter() {
+
+        if min_zoom > layer.maxzoom || max_zoom < layer.minzoom {
+            // This layer doesn't apply.
+            continue;
+        }
+        println!("\nLayer {}", layer.id);
+
+        let (printer_tx, printer_rx) = channel();
+        let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
+
+        let mut metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, &bbox, min_zoom, max_zoom);
+        let mut metatile_iterator = Arc::new(Mutex::new(metatile_iterator));
+
+        let mut workers = Vec::with_capacity(num_threads);
+        for _ in 0..num_threads {
+            // TODO do I need all these clones?
+            let my_connection_pool = ConnectionPool::new(layers.get_all_connections());
+            let my_printer_tx = printer_tx.clone();
+            let my_fileio_tx = fileio_tx.clone();
+            let my_metatile_iterator = Arc::clone(&metatile_iterator);
+            let my_layer = layer.clone();
+            let my_dest = dest.clone();
+
+            // TODO 'should do metatile'
+
+            let handle = thread::spawn(move || {
+                worker_one_layer(my_printer_tx, my_fileio_tx, my_metatile_iterator, &my_connection_pool, &my_layer, global_maxzoom);
+            });
+            workers.push(handle);
+        }
+
+        for worker in workers {
+            // If one of our worker threads has panic'ed, then this main programme should fail too
+            worker.join().ok();
+        }
+
+        printer_tx.send(printer::PrinterMessage::Quit).unwrap();
+        printer_thread.join().unwrap();
+    }
+
+
+    fileio_tx.send(FileIOMessage::Quit).unwrap();
+
+    println!("All tiles generated. Waiting for all to be written to disk...");
+
+    fileio_thread.join().unwrap();
+
+    println!("Finished.");
+
+}
+
+fn worker_one_layer(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, connection_pool: &ConnectionPool, layer: &Layer, global_maxzoom: u8)
+{
+    loop {
+        let metatile = metatile_iterator.lock().unwrap().next();
+        if let None = metatile {
+            // The iterator is finished.
+            break;
+        }
+        let metatile = metatile.unwrap();
+        let scale = metatile.size() as u32;
+
+
+        let tiles = single_layer(&layer, global_maxzoom, &metatile, &connection_pool);
+
+        let num_tiles = tiles.len();
+
+        for (i, mvt_layer) in tiles.into_iter().enumerate() {
+            let i = i as u32;
+            let x = i / scale + metatile.x();
+            let y = i % scale + metatile.y();
+            let tile = slippy_map_tiles::Tile::new(metatile.zoom(), x, y).unwrap();
+            
+            fileio_tx.send(FileIOMessage::AppendToTile(tile, mvt_layer.to_bytes())).unwrap();
+        }
 
         printer_tx.send(printer::PrinterMessage::DoneTiles(metatile.zoom(), 1, num_tiles)).unwrap();
 
