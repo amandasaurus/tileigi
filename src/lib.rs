@@ -820,9 +820,13 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
                 },
                 None => None,
             }).collect();
-        geoms.reverse();
 
-        let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>, properties: Rc<mapbox_vector_tile::Properties>| {
+        // If there are >1 tiles, then we don't want to clone the properties everytime. So share
+        // the data between all mapbox_vector_tile::Features using a Rc.
+        // This is only a small speed up.
+        let properties = Rc::new(properties);
+
+        for (tile, mut geom) in geoms.into_iter() {
 
             let i = (tile.x() - metatile.x()) as i32;
             let j = (tile.y() - metatile.y()) as i32;
@@ -831,31 +835,12 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
 
             //debug_assert!(is_valid(&geom));
 
-            let feature = mapbox_vector_tile::Feature::new(geom, properties);
+            let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
             let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
             let mvt_tile = results.get_mut(i).unwrap();
             mvt_tile.add_feature(feature);
 
         };
-
-        // In cases where there is only one geometry here, we don't want to clone the
-        // `properties`, and instead move it. If there are N geometries, we want to do N-1
-        // clones, and 1 move. Hence the duplication with the loop.
-        //
-        // We want to do this in order, so we reverse the vec, and the pop from the end
-        // (which is the original front).
-        let properties = Rc::new(properties);
-        loop {
-            if geoms.len() <= 1 { break; }
-            if let Some((tile, geom)) = geoms.pop() {
-                save_single_tile(tile, geom, properties.clone());
-            }
-        }
-
-        //if geoms.is_empty() { return results; }
-        if let Some((tile, geom)) = geoms.pop() {
-            save_single_tile(tile, geom, properties.clone());
-        }
 
     }
 
