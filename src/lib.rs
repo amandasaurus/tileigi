@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use std::collections::{HashSet, HashMap};
 use std::time::Instant;
 use std::borrow::{Cow, Borrow};
+use std::rc::Rc;
 
 use std::thread;
 use std::sync::mpsc::{channel, sync_channel, Sender, SyncSender};
@@ -821,7 +822,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
             }).collect();
         geoms.reverse();
 
-        let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>, properties: mapbox_vector_tile::Properties| {
+        let mut save_single_tile = |tile: slippy_map_tiles::Tile, mut geom: Geometry<i32>, properties: Rc<mapbox_vector_tile::Properties>| {
 
             let i = (tile.x() - metatile.x()) as i32;
             let j = (tile.y() - metatile.y()) as i32;
@@ -843,6 +844,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
         //
         // We want to do this in order, so we reverse the vec, and the pop from the end
         // (which is the original front).
+        let properties = Rc::new(properties);
         loop {
             if geoms.len() <= 1 { break; }
             if let Some((tile, geom)) = geoms.pop() {
@@ -852,7 +854,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
 
         //if geoms.is_empty() { return results; }
         if let Some((tile, geom)) = geoms.pop() {
-            save_single_tile(tile, geom, properties);
+            save_single_tile(tile, geom, properties.clone());
         }
 
     }
