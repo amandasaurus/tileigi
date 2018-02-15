@@ -3,6 +3,8 @@ use std::sync::mpsc::Receiver;
 use std::io::Write;
 use std::cmp::max;
 
+use separator::Separatable;
+
 #[derive(Debug,Eq,PartialEq)]
 pub enum PrinterMessage {
     // Time to quit
@@ -18,6 +20,11 @@ fn fmt_duration(dur: &time::Duration) -> String {
 
 fn duration_to_float_secs(dur: &time::Duration) -> f64 {
     (dur.as_secs() as f64) + (dur.subsec_nanos() as f64 / 1e9)
+}
+
+fn round(x: f64, places: i32) -> f64 {
+    let mult: f64 = 10_f64.powi(places);
+    (x * mult).round()/mult
 }
 
 pub fn printer(rx: Receiver<PrinterMessage>) {
@@ -52,7 +59,7 @@ pub fn printer(rx: Receiver<PrinterMessage>) {
         }
 
         let duration = duration_to_float_secs(&start.elapsed());
-        write!(stdout, "\r[{:>6}s] z{:>2}, {:4} tiles ({:9.4} tiles/s, {:9.4} metatiles/s, last sec: {:5} tiles)", start.elapsed().as_secs(), current_zoom, num_tiles_done, (num_tiles_done as f64)/duration, (num_metatiles_done as f64)/duration, num_this_sec).ok();
+        write!(stdout, "\r[{:>6}s] z{:>2}, {:>4} tiles ({:>9} tiles/s, {:>9} metatiles/s, last sec: {:>5} tiles)   ", start.elapsed().as_secs(), current_zoom, num_tiles_done.separated_string(), round((num_tiles_done as f64)/duration, 4).separated_string(), round((num_metatiles_done as f64)/duration, 4).separated_string(), num_this_sec.separated_string()).ok();
         stdout.flush().ok();
 
         if should_quit {
@@ -63,5 +70,5 @@ pub fn printer(rx: Receiver<PrinterMessage>) {
     }
 
     let duration = duration_to_float_secs(&start.elapsed());
-    println!("\nFinished. {} tiles ({} metatiles), done in {} ({:9.4} metatiles/sec, {:9.4} tiles/sec)", num_tiles_done, num_metatiles_done, fmt_duration(&start.elapsed()), (num_metatiles_done as f64)/duration, (num_tiles_done as f64)/duration );
+    println!("\nFinished. {} tiles ({} metatiles), done in {} ({:>9} metatiles/sec, {:>9} tiles/sec)", num_tiles_done.separated_string(), num_metatiles_done.separated_string(), fmt_duration(&start.elapsed()), round((num_metatiles_done as f64)/duration, 4).separated_string(), round((num_tiles_done as f64)/duration, 4).separated_string() );
 }

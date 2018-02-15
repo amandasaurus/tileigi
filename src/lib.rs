@@ -15,6 +15,7 @@ extern crate num_traits;
 extern crate rusqlite;
 extern crate md5;
 extern crate byteorder;
+extern crate separator;
 
 use std::fs::File;
 use std::fs;
