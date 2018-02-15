@@ -831,14 +831,14 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
             let i = (tile.x() - metatile.x()) as i32;
             let j = (tile.y() - metatile.y()) as i32;
 
-            geom.map_coords_inplace(&|&(x, y)| ( (x - (4096*i)), (y - (4096*j))));
+            let xoff = i*4096;
+            let yoff = j*4096;
 
-            //debug_assert!(is_valid(&geom));
+            geom.map_coords_inplace(&|&(x, y)| ( (x - xoff), (y - yoff)));
 
             let feature = mapbox_vector_tile::Feature::new(geom, properties.clone());
-            let i = ((tile.x() - metatile.x())*scale + (tile.y() - metatile.y())) as usize;
-            let mvt_tile = results.get_mut(i).unwrap();
-            mvt_tile.add_feature(feature);
+            let n = (i*(scale as i32) + j) as usize;
+            results.get_mut(n).unwrap().add_feature(feature);
 
         };
 
