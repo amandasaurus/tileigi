@@ -295,7 +295,8 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
 
     let (printer_tx, printer_rx) = channel();
-    let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
+    let new_bbox: Option<BBox> = bbox.clone();
+    let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx, new_bbox, metatile_scale, min_zoom, max_zoom) });
 
     let (fileio_tx, fileio_rx) = sync_channel(1_000_000);
 
@@ -438,7 +439,8 @@ pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Opti
         println!("\nLayer {}", layer.id);
 
         let (printer_tx, printer_rx) = channel();
-        let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx) });
+        let new_bbox: Option<BBox> = bbox.clone();
+        let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx, new_bbox, metatile_scale, min_zoom, max_zoom) });
 
         let mut metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, &bbox, min_zoom, max_zoom);
         let mut metatile_iterator = Arc::new(Mutex::new(metatile_iterator));
