@@ -15,8 +15,19 @@ pub enum PrinterMessage {
     DoneTiles(u8, usize, usize),
 }
 
-fn fmt_duration(dur: &time::Duration) -> String {
-    format!("{:.2}s", duration_to_float_secs(dur))
+fn fmt_duration(sec: u64) -> String {
+    let (min, sec) = (sec / 60, sec % 60);
+    let (hr, min) = (min / 60, min % 60);
+    let (day, hr) = (hr / 24, hr % 24);
+    if day > 0 {
+        format!("{}d{:>02}h{:>02}m{:>02}s", day, hr, min, sec)
+    } else if hr > 0 {
+        format!("{}h{:>02}m{:>02}s", hr, min, sec)
+    } else if min > 0 {
+        format!("{}m{:>02}s", min, sec)
+    } else {
+        format!("{}s", sec)
+    }
 }
 
 fn duration_to_float_secs(dur: &time::Duration) -> f64 {
@@ -92,26 +103,26 @@ pub fn printer(rx: Receiver<PrinterMessage>, bbox: Option<slippy_map_tiles::BBox
             Some(total_num_of_metatiles) => {
                 let fraction = (num_metatiles_done as f32)/(total_num_of_metatiles as f32);
                 let est_total = (start.elapsed().as_secs() as f32/fraction).round() as u64;
-                if start.elapsed().as_secs() > est_total {
+                if start.elapsed().as_secs() < 3 || start.elapsed().as_secs() > est_total {
                     // Can happen at the start with rounding and few samples
                     format!("N/A")
                 } else {
                     let eta_secs = est_total - start.elapsed().as_secs();
-                    format!("{}s", eta_secs)
+                    fmt_duration(eta_secs)
                 }
             }
         };
 
         let duration = duration_to_float_secs(&start.elapsed());
-        write!(stdout, "\r{percent} [{duration:>6}s] ETA: {eta} z{zoom:>2}, {num_tiles:>4} tiles {num_metatiles} metatiles ({tiles_p_s:>9} tiles/s, {mt_p_s:>9} metatiles/s, last sec: {last_num:>5} tiles)   ",
-            duration=start.elapsed().as_secs(),
+        write!(stdout, "\r{percent} [{duration:>6}] ETA: {eta} z{zoom:>2}, {num_tiles:>4} tiles ({tiles_p_s:>9} tiles/s, last sec: {last_num:>5} tiles)   ",
+            duration=fmt_duration(start.elapsed().as_secs()),
             eta=eta,
             zoom=current_zoom,
             num_tiles=num_tiles_done.separated_string(),
             percent=percent_done,
-            num_metatiles=num_metatiles_done.separated_string(),
+            //num_metatiles=num_metatiles_done.separated_string(),
             tiles_p_s=round((num_tiles_done as f64)/duration, 4).separated_string(),
-            mt_p_s=round((num_metatiles_done as f64)/duration, 4).separated_string(),
+            //mt_p_s=round((num_metatiles_done as f64)/duration, 4).separated_string(),
             last_num=num_this_sec.separated_string()
         ).ok();
 
@@ -125,5 +136,5 @@ pub fn printer(rx: Receiver<PrinterMessage>, bbox: Option<slippy_map_tiles::BBox
     }
 
     let duration = duration_to_float_secs(&start.elapsed());
-    println!("\nFinished. {} tiles ({} metatiles), done in {} ({:>9} metatiles/sec, {:>9} tiles/sec)", num_tiles_done.separated_string(), num_metatiles_done.separated_string(), fmt_duration(&start.elapsed()), round((num_metatiles_done as f64)/duration, 4).separated_string(), round((num_tiles_done as f64)/duration, 4).separated_string() );
+    println!("\nFinished. {} tiles ({} metatiles), done in {} ({:>9} metatiles/sec, {:>9} tiles/sec)", num_tiles_done.separated_string(), num_metatiles_done.separated_string(), fmt_duration(start.elapsed().as_secs()), round((num_metatiles_done as f64)/duration, 4).separated_string(), round((num_tiles_done as f64)/duration, 4).separated_string() );
 }
