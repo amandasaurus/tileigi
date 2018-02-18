@@ -1,3 +1,20 @@
+<a name="v0.5.0"></a>
+## v0.5.0 (2018-02-18)
+
+
+#### Performance
+
+*   Even less clones ([250f3bb0](250f3bb0))
+*   Remove unnesseary .clone() ([b56f476c](b56f476c))
+
+#### Features
+
+*   Better output printing for times. hms ([489b84c5](489b84c5))
+*   Print ETA and percentage while generation. It's slightly wrong. ([ddd2e218](ddd2e218))
+*   Print numbers with commas ([c789e331](c789e331))
+
+
+
 <a name="v0.3.0"></a>
 ## v0.3.0 (2018-02-18)
 
