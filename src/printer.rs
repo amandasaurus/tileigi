@@ -15,6 +15,14 @@ pub enum PrinterMessage {
     DoneTiles(u8, usize, usize),
 }
 
+fn fmt_rate(num: f64) -> String {
+    if num > 1000. {
+        (num.trunc() as i64).separated_string()
+    } else {
+        format!("{:.4}", num)
+    }
+}
+
 fn fmt_duration(sec: u64) -> String {
     let (min, sec) = (sec / 60, sec % 60);
     let (hr, min) = (min / 60, min % 60);
@@ -121,7 +129,7 @@ pub fn printer(rx: Receiver<PrinterMessage>, bbox: Option<slippy_map_tiles::BBox
             num_tiles=num_tiles_done.separated_string(),
             percent=percent_done,
             //num_metatiles=num_metatiles_done.separated_string(),
-            tiles_p_s=round((num_tiles_done as f64)/duration, 4).separated_string(),
+            tiles_p_s=fmt_rate((num_tiles_done as f64)/duration),
             //mt_p_s=round((num_metatiles_done as f64)/duration, 4).separated_string(),
             last_num=num_this_sec.separated_string()
         ).ok();
