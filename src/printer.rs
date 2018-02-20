@@ -144,5 +144,5 @@ pub fn printer(rx: Receiver<PrinterMessage>, bbox: Option<slippy_map_tiles::BBox
     }
 
     let duration = duration_to_float_secs(&start.elapsed());
-    println!("\nFinished. {} tiles ({} metatiles), done in {} ({:>9} metatiles/sec, {:>9} tiles/sec)", num_tiles_done.separated_string(), num_metatiles_done.separated_string(), fmt_duration(start.elapsed().as_secs()), round((num_metatiles_done as f64)/duration, 4).separated_string(), round((num_tiles_done as f64)/duration, 4).separated_string() );
+    println!("\nFinished. {} tiles ({} metatiles), done in {} ({:>9} metatiles/sec, {:>9} tiles/sec)", num_tiles_done.separated_string(), num_metatiles_done.separated_string(), fmt_duration(start.elapsed().as_secs()), fmt_rate((num_metatiles_done as f64)/duration), fmt_rate((num_tiles_done as f64)/duration) );
 }
