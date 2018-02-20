@@ -1,3 +1,18 @@
+<a name="v0.6.0"></a>
+## v0.6.0 (2018-02-20)
+
+
+#### Bug Fixes
+
+*   Work around int overflow by not trying to be as clever ([f9725c72](f9725c72))
+
+#### Features
+
+*   Formatting improvements ([e3c5b098](e3c5b098))
+*   UI improvements for printing numbers. ([56156917](56156917))
+
+
+
 <a name="v0.5.0"></a>
 ## v0.5.0 (2018-02-18)
 
