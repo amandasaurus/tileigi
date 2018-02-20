@@ -182,7 +182,7 @@ pub fn ensure_polygon_orientation(geom: &mut Geometry<i32>) {
     }
 }
 
-fn has_self_intersections<T: CoordinateType+Signed+Debug+Ord>(ls: &LineString<T>) -> bool {
+fn has_self_intersections(ls: &LineString<i32>) -> bool {
     if ls.0.len() <= 4 {
         // cannot have a self intersection with this few members. (There shouldn't be <4 anyway)
         // With 4 points, it's a orientation, not self-intersection thing really
@@ -253,19 +253,24 @@ enum Intersection<T> {
     Crossing((T, T))
 }
 
-fn intersect_incl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> bool {
-    intersection(x1, y1, x2, y2, x3, y3, x4, y4) == Intersection::None
-}
+//fn intersect_incl_end<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> bool {
+//    intersection(x1, y1, x2, y2, x3, y3, x4, y4) == Intersection::None
+//}
 
 
 /// True iff the segments |p1p2| and |p3p4| intersect at any point, and the intersection point is
 /// not on both end points. i.e. 2 lines can join end-to-end in this, but not touch anywhere else.
-fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, x3: T, y3: T, x4: T, y4: T) -> Intersection<T> {
+fn intersection(x1: i32, y1: i32, x2: i32, y2: i32, x3: i32, y3: i32, x4: i32, y4: i32) -> Intersection<i32> {
     if max(x1, x2) < min(x3, x4) || min(x1, x2) > max(x3, x4)
         || max(y1, y2) < min(y3, y4) || min(y1, y2) > max(y3, y4)
     {
         return Intersection::None;
     }
+
+    let x1 = x1 as i64; let y1 = y1 as i64;
+    let x2 = x2 as i64; let y2 = y2 as i64;
+    let x3 = x3 as i64; let y3 = y3 as i64;
+    let x4 = x4 as i64; let y4 = y4 as i64;
     
     //println!("\nline12 ({:?}, {:?}) - ({:?}, {:?})", x1, y1, x2, y2);
     //println!("line34 ({:?}, {:?}) - ({:?}, {:?})", x3, y3, x4, y4);
@@ -279,7 +284,7 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
     let d = y3 - y4;
 
     let determinate = a*d - b*c;
-    if determinate == T::zero() {
+    if determinate == 0 {
         // TODO should probably profile & optimize this bit
         // Slope of line12 is a/c, slope of line34 is b/d. Lines are parallel/colinear if a/c =
         // b/d, i.e.  a*d - b*c == 0
@@ -288,7 +293,7 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
         // The lines are the same (if we ignore direction). One lies totally on top of the
         // other
         if ((x1, y1) == (x3, y3) && (x2, y2) == (x4, y4)) || ((x1, y1) == (x4, y4) && (x2, y2) == (x3, y3)) {
-            return Intersection::Overlapping((x1, y1), (x2, y2));
+            return Intersection::Overlapping((x1 as i32, y1 as i32), (x2 as i32, y2 as i32));
         }
         
 
@@ -338,36 +343,36 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
                 match (p3_on_12, p4_on_12) {
                     (true, true) => {
                         // both on the line
-                        return Intersection::Overlapping((x3, y3), (x4, y4));
+                        return Intersection::Overlapping((x3 as i32, y3 as i32), (x4 as i32, y4 as i32));
                     },
                     (true, false) => {
                         // p3 is on the line 12, but which of p1 & p2 is the other point
                         // either p1 or p2 is on the line 34
                         debug_assert!(point_on_line_incl_end((x3, y3), (x4, y4), (x1, y1)) || point_on_line_incl_end((x3, y3), (x4, y4), (x2, y2)));
                         let other_point = if point_on_line_incl_end((x3, y3), (x4, y4), (x1, y1)) {
-                            (x1, y1)
+                            (x1 as i32, y1 as i32)
                         } else {
                             debug_assert!(point_on_line_incl_end((x3, y3), (x4, y4), (x2, y2)));
-                            (x2, y2)
+                            (x2 as i32, y2 as i32)
                         };
-                        return Intersection::Overlapping((x3, y3), other_point);
+                        return Intersection::Overlapping((x3 as i32, y3 as i32), other_point);
                     },
                     (false, true) => {
                         // p4 is on the line 12, but which of p1 & p2 is the other point
                         // either p1 or p2 is on the line 34
                         debug_assert!(point_on_line_incl_end((x3, y3), (x4, y4), (x1, y1)) || point_on_line_incl_end((x3, y3), (x4, y4), (x2, y2)));
                         let other_point = if point_on_line_incl_end((x3, y3), (x4, y4), (x1, y1)) {
-                            (x1, y1)
+                            (x1 as i32, y1 as i32)
                         } else {
                             debug_assert!(point_on_line_incl_end((x3, y3), (x4, y4), (x2, y2)));
-                            (x2, y2)
+                            (x2 as i32, y2 as i32)
                         };
-                        return Intersection::Overlapping((x4, y4), other_point);
+                        return Intersection::Overlapping((x4 as i32, y4 as i32), other_point);
                     },
                     (false, false) => {
                         // This can happen when 12 is a subset of 34
                         debug_assert!(point_on_line_incl_end((x3, y3), (x4, y4), (x1, y1)) && point_on_line_incl_end((x3, y3), (x4, y4), (x2, y2)));
-                        return Intersection::Overlapping((x1, y1), (x2, y2));
+                        return Intersection::Overlapping((x1 as i32, y1 as i32), (x2 as i32, y2 as i32));
                     }
                 }
             },
@@ -384,36 +389,38 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
     let determinate = determinate.abs();
 
     let sd = signum * (a*f - c*e);
-    if sd > determinate || sd < T::zero() {
+    if sd > determinate || sd < 0 {
         return Intersection::None;
     }
 
     let td = signum*(d*e - b*f);
-    if td > determinate || td < T::zero() {
+    if td > determinate || td < 0 {
         return Intersection::None;
     }
 
-    if (td == determinate || td == T::zero()) && (sd == T::zero() || sd == determinate) {
+    if (td == determinate || td == 0) && (sd == 0 || sd == determinate) {
         // endpoints overlap
         return Intersection::EndToEnd;
-    } else if (td == determinate || td == T::zero()) && (sd > T::zero() || sd < determinate) {
-        if td == T::zero() {
-            return Intersection::Touching((x1, y1));
+    } else if (td == determinate || td == 0) && (sd > 0 || sd < determinate) {
+        if td == 0 {
+            return Intersection::Touching((x1 as i32, y1 as i32));
         } else if td == determinate {
-            return Intersection::Touching((x2, y2));
+            return Intersection::Touching((x2 as i32, y2 as i32));
         } else {
             unreachable!();
         }
-    } else if (td < determinate || td > T::zero()) && (sd == T::zero() || sd == determinate) {
-        if sd == T::zero() {
-            return Intersection::Touching((x3, y3));
+    } else if (td < determinate || td > 0) && (sd == 0 || sd == determinate) {
+        if sd == 0 {
+            return Intersection::Touching((x3 as i32, y3 as i32));
         } else if sd == determinate {
-            return Intersection::Touching((x4, y4));
+            return Intersection::Touching((x4 as i32, y4 as i32));
         } else {
             unreachable!();
         }
-    } else if td > T::zero() && td < determinate && sd > T::zero() && sd < determinate {
+    } else if td > 0 && td < determinate && sd > 0 && sd < determinate {
         // This will do some roundingin on integers
+        //println!("1 ({:?}, {:?}) 2 ({:?}, {:?}) 3 ({:?}, {:?}) 4 ({:?}, {:?})", x1, y1, x2, y2, x3, y3, x4, y4);
+        //println!("td {:?} x2-x2 {:?}", td, (x2 - x1));
         let xd = td*(x2 - x1);
         let xd = xd/determinate;
         let mut x = xd + x1;
@@ -429,19 +436,23 @@ fn intersection<T: CoordinateType+Signed+Debug+Ord>(x1: T, y1: T, x2: T, y2: T, 
         // Look at the remained from *d/determinate, and if it's more than half the value of
         // determinate (or twice it is more than determinate), then the first decimal place would
         // be above 5, ergo we should round up. i.e. we add one to the current numbers
-        let two = T::one() + T::one();
+        let two = 1 + 1;
         let twice_x_remainder = two*(xd % determinate);
         if twice_x_remainder >= determinate {
-            x = x + T::one();
+            x = x + 1;
         }
 
         let twice_y_remainder = two*(yd % determinate);
         if twice_y_remainder >= determinate {
-            y = y + T::one();
+            y = y + 1;
         }
         //println!("twice_x_remainder {:?} twice_y_remainder {:?}", twice_x_remainder, twice_y_remainder);
 
-        return Intersection::Crossing((x, y));
+        debug_assert!(x <= ::std::i32::MAX as i64);
+        debug_assert!(x >= ::std::i32::MIN as i64);
+        debug_assert!(y <= ::std::i32::MAX as i64);
+        debug_assert!(y >= ::std::i32::MIN as i64);
+        return Intersection::Crossing((x as i32, y as i32));
     }
 
     // Should have been caught above.
@@ -522,7 +533,7 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
 /// Modify the LineString, so that at all self-intersection places there is a node. i.e. if 2
 /// segments cross, add a node in the middle of each segment where they cross. After this all
 /// self-intersections will be of the EndToEnd type
-fn add_points_for_all_crossings<T: CoordinateType+Debug+Signed+Ord+Into<f64>>(ls: &mut LineString<T>) {
+fn add_points_for_all_crossings(ls: &mut LineString<i32>) {
     if ls.0.len() <= 3 {
         return;
     }
@@ -1283,6 +1294,10 @@ mod test {
         // (-4716, 2880)
     }
 
+    #[test]
+    fn intersect15() {
+        assert_eq!(intersection(20480, 23619, 24576, 21764, 24576, 21328, 21328, 24576), Intersection::Crossing((23779, 22125)));
+    }
 
     #[test]
     fn validity_checks() {

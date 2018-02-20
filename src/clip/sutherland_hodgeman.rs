@@ -181,8 +181,8 @@ mod test {
     #[test]
     fn border_clip_funny_shapes(){
         // Triangle pointing up
-        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0., 0.), (1., 5.), (2., 0.), (0., 0.)].into()), &Border::YMax(2.)),
-            Some(vec![(0., 0.), (0.4, 2.), (1.6, 2.), (2., 0.), (0., 0.)].into())
+        assert_eq!(clip_ring_to_border(Cow::Borrowed(&vec![(0, 0), (1, 5), (2, 0), (0, 0)].into()), &Border::YMax(2)),
+            Some(vec![(0, 0), (04, 2), (16, 2), (2, 0), (0, 0)].into())
         );
     }
 
