@@ -671,9 +671,9 @@ fn add_points_for_all_crossings(ls: &mut LineString<i32>) {
             }
             // I don't think there are many cases where you would need to add 100+ points, so maybe
             // this is a mistake?
-            if offset > 500 {
-                ::print_geom_as_geojson(&ls.clone().into(), 4096.*8.);
-            }
+            //if offset > 500 {
+            //    ::print_geom_as_geojson(&ls.clone().into(), 4096.*8.);
+            //}
             debug_assert!(offset <= 500, "{}:{} {} points were added to the line!! This seems too high? Investigate?", file!(), line!(), offset);
             //println!("{}:{} We added {} new points to the line", file!(), line!(), offset);
         }
