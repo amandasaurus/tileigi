@@ -211,22 +211,22 @@ impl TileDestination for ModTileMetatileDirectory {
     }
 
     fn save_metatile(&mut self, metatile: slippy_map_tiles::Metatile, tiles: Vec<(slippy_map_tiles::Tile, Vec<u8>)>) {
-        assert_eq!(metatile.scale(), 8);
+        let size = metatile.size() as usize;
         // TODO suspect I can optimize this...
         // Are there unnecessary memory copies?
         let x = metatile.x();
         let y = metatile.y();
         let mut tiles_array: Vec<Vec<u8>> = vec![vec![]; 64];
         for (tile, bytes) in tiles.into_iter() {
-            let i = ((tile.x()-x)*8 + (tile.y()-y)) as usize;
+            let i = ((tile.x()-x)*size as u32 + (tile.y()-y)) as usize;
             tiles_array[i] = bytes;
         }
         let tiles = tiles_array;
 
-        let mut offsets = vec![0; 64];
-        let mut sizes = vec![0; 64];
+        let mut offsets = vec![0; size*size];
+        let mut sizes = vec![0; size*size];
         let mut curr_offset = 0;
-        for i in 0..64 {
+        for i in 0..(size*size) {
             offsets[i] = curr_offset;
             let this_size = tiles[i].len();
             sizes[i] = this_size;
@@ -239,17 +239,17 @@ impl TileDestination for ModTileMetatileDirectory {
 
         let mut file = BufWriter::new(File::create(filename).unwrap());
         file.write_all(&[0x4d, 0x45, 0x54, 0x41]).unwrap(); // 'META' magic string
-        file.write_u32::<LittleEndian>(64).unwrap();
+        file.write_u32::<LittleEndian>((size*size) as u32).unwrap();
         file.write_u32::<LittleEndian>(x).unwrap();
         file.write_u32::<LittleEndian>(y).unwrap();
         file.write_u32::<LittleEndian>(metatile.zoom() as u32).unwrap();
 
-        for i in 0..64 {
+        for i in 0..(size*size) {
             file.write_u32::<LittleEndian>(offsets[i] as u32).unwrap();
             file.write_u32::<LittleEndian>(sizes[i] as u32).unwrap();
         }
 
-        for i in 0..64 {
+        for i in 0..(size*size) {
             file.write_all(&tiles[i]).unwrap();
         }
 
