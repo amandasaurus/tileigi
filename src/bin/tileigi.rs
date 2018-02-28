@@ -4,7 +4,7 @@ extern crate clap;
 
 extern crate tileigi;
 
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use clap::{Arg, App, AppSettings, ArgGroup};
 use slippy_map_tiles::BBox;
 
@@ -43,6 +43,12 @@ fn main() {
 
         .arg(Arg::with_name("if_not_exists").long("if-not-exists").help("Do not generate a tile if the file already exists. Doesn't work with mbtiles (yet)"))
         .arg(Arg::with_name("no_compress").long("no-compress").help("Do not compress the pbf files"))
+
+        .arg(Arg::with_name("tile_list")
+             .long("tile-list").alias("list")
+             .takes_value(true).required(false).value_name("FILENAME")
+             .validator(|s| { if Path::new(&s).exists() { Ok(()) } else { Err(format!("File {} not found", s)) }})
+             .help("Generate tiles from a list of tiles, one metatile per line 'SCALE Z/X/Y'"))
         .get_matches();
 
     let data_yml = matches.value_of("data_yml").unwrap();
@@ -86,12 +92,14 @@ fn main() {
         },
     };
 
+    let tile_list: Option<String> = matches.value_of("tile_list").map(|s| s.to_string());
+
     match matches.value_of("iter_mode") {
         Some("tile-then-layer") => {
-            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads);
+            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list);
         },
         Some("layer-then-tile") => {
-            generate_by_layer(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads);
+            generate_by_layer(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list);
         },
         _ => panic!(),
     }

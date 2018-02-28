@@ -20,6 +20,7 @@ extern crate separator;
 use std::fs::File;
 use std::fs;
 use std::io::prelude::*;
+use std::io::{BufReader, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::collections::{HashSet, HashMap};
 use std::time::Instant;
@@ -288,15 +289,53 @@ fn scale_denominator_for_zoom(zoom: u8) -> f32 {
     }
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>) {
     let layers = Layers::from_file(filename);
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
 
+    let (metatile_iterator, total_num_of_metatiles) = match tile_list {
+        None => {
+            let total_num_of_metatiles: Option<usize> = (min_zoom..max_zoom+1).map(|z| {
+                match *bbox {
+                    None => {
+                        let scale = (metatile_scale.trailing_zeros()) as u32;
+                        let z = z as u32;
+                        if scale >= z {
+                            Some(1)
+                        } else {
+                            Some(2_u64.pow(2u32 * (z-scale)) as usize)
+                        }
+                    },
+                    Some(ref bbox) => {
+                        let this = slippy_map_tiles::size_bbox_zoom_metatiles(&bbox, z, metatile_scale);
+                        this
+                    },
+                }})
+                .fold(Some(0_usize), |acc, on_this_zoom| {
+                    match (acc, on_this_zoom) {
+                        (Some(x), Some(y)) => x.checked_add(y),
+                        _ => None,
+                    }
+                });
+
+            let metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, &bbox, min_zoom, max_zoom);
+
+            (metatile_iterator, total_num_of_metatiles)
+        },
+        Some(tile_list) => {
+            let mt_file_list = MetatilesIterator::new_from_filelist(tile_list);
+            let total_num_of_metatiles = mt_file_list.total();
+            (mt_file_list, total_num_of_metatiles)
+        }
+    };
+
+    let metatile_iterator = Arc::new(Mutex::new(metatile_iterator));
+
 
     let (printer_tx, printer_rx) = channel();
     let new_bbox: Option<BBox> = bbox.clone();
-    let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx, new_bbox, metatile_scale, min_zoom, max_zoom) });
+    let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx, total_num_of_metatiles) });
 
     let (fileio_tx, fileio_rx) = sync_channel(1_000_000);
 
@@ -318,8 +357,6 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
         },
     };
 
-    let mut metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, &bbox, min_zoom, max_zoom);
-    let mut metatile_iterator = Arc::new(Mutex::new(metatile_iterator));
 
 
     let mut workers = Vec::with_capacity(num_threads);
@@ -373,7 +410,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
 }
 
-fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, connection_pool: &ConnectionPool, layers: &Layers, should_do_metatile: F)
+fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<Iterator<Item=Metatile>>>, connection_pool: &ConnectionPool, layers: &Layers, should_do_metatile: F)
     where F: Fn(&slippy_map_tiles::Metatile) -> bool,
 {
     loop {
@@ -403,7 +440,10 @@ fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: 
 
 }
 
-pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize) {
+pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>) {
+    if tile_list.is_some() {
+        unimplemented!();
+    }
     let layers = Layers::from_file(filename);
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
@@ -438,9 +478,33 @@ pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Opti
         }
         println!("\nLayer {}", layer.id);
 
+
+        let total_num_of_metatiles: Option<usize> = (min_zoom..max_zoom+1).map(|z| {
+            match *bbox {
+                None => {
+                    let scale = (metatile_scale.trailing_zeros()) as u32;
+                    let z = z as u32;
+                    if scale >= z {
+                        Some(1)
+                    } else {
+                        Some(2_u64.pow(2u32 * (z-scale)) as usize)
+                    }
+                },
+                Some(ref bbox) => {
+                    let this = slippy_map_tiles::size_bbox_zoom_metatiles(&bbox, z, metatile_scale);
+                    this
+                },
+            }})
+            .fold(Some(0_usize), |acc, on_this_zoom| {
+                match (acc, on_this_zoom) {
+                    (Some(x), Some(y)) => x.checked_add(y),
+                    _ => None,
+                }
+            });
+
         let (printer_tx, printer_rx) = channel();
         let new_bbox: Option<BBox> = bbox.clone();
-        let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx, new_bbox, metatile_scale, min_zoom, max_zoom) });
+        let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx, total_num_of_metatiles) });
 
         let mut metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, &bbox, min_zoom, max_zoom);
         let mut metatile_iterator = Arc::new(Mutex::new(metatile_iterator));

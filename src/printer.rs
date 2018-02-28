@@ -47,7 +47,7 @@ fn round(x: f64, places: i32) -> f64 {
     (x * mult).round()/mult
 }
 
-pub fn printer(rx: Receiver<PrinterMessage>, bbox: Option<slippy_map_tiles::BBox>, metatile_scale: u8, minzoom: u8, maxzoom: u8) {
+pub fn printer(rx: Receiver<PrinterMessage>, total_num_of_metatiles: Option<usize>) {
     let mut num_metatiles_done = 0;
     let mut num_tiles_done = 0;
     let mut current_zoom = 0;
@@ -57,29 +57,6 @@ pub fn printer(rx: Receiver<PrinterMessage>, bbox: Option<slippy_map_tiles::BBox
 
     let mut stdout = ::std::io::stdout();
     
-    let total_num_of_metatiles: Option<usize> = (minzoom..maxzoom+1).map(|z| {
-        match bbox {
-            None => {
-                let scale = (metatile_scale.trailing_zeros()) as u32;
-                Some(2_u64.pow(2 * (z as u32-scale) as u32) as usize)
-            },
-            Some(ref bbox) => {
-                let this = slippy_map_tiles::size_bbox_zoom_metatiles(&bbox, z, metatile_scale);
-                //println!("z {} {:?}", z, this);
-                this
-            },
-        }})
-        .fold(Some(0_usize), |acc, on_this_zoom| {
-            match (acc, on_this_zoom) {
-                (Some(x), Some(y)) => x.checked_add(y),
-                _ => None,
-            }
-        });
-
-        //println!("total_num_of_metatiles {:?}", total_num_of_metatiles);
-                   
-
-
     loop {
         let mut num_this_sec = 0;
 
