@@ -1,3 +1,20 @@
+<a name="v0.6.0"></a>
+## v0.6.0 (2018-02-28)
+
+
+#### Features
+
+*   Can read tiles from a file and only generate them ([317e484e](317e484e))
+*   Formatting improvements ([e3c5b098](e3c5b098))
+*   UI improvements for printing numbers. ([56156917](56156917))
+
+#### Bug Fixes
+
+*   Properly handle zoom levels 0ish with metatiles ([a360d228](a360d228))
+*   Work around int overflow by not trying to be as clever ([f9725c72](f9725c72))
+
+
+
 <a name="v0.5.0"></a>
 ## v0.5.0 (2018-02-18)
 
