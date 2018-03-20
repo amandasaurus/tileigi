@@ -1926,5 +1926,23 @@ mod test {
         assert_eq!(order_points( ((29147, 10518), (17365, 10520)), (-16552, 10518), (-4238, 10518) ), Ordering::Greater );
     }
 
+    #[test]
+    fn make_rings_valid1() {
+        // a--b f--e
+        // |   X   |
+        // h--g c--d
+        let a = Point::new(0, 0); let b = Point::new(1, 0); let f = Point::new(2, 0); let e = Point::new(3, 0);
+        let h = Point::new(0, 1); let g = Point::new(1, 1); let c = Point::new(2, 1); let d = Point::new(3, 1);
+        let line: LineString<_> = vec![a, b, c, d, e, f, g, h, a].into();
+        let rings = vec![line];
+        let valid = make_rings_valid(rings).unwrap();
+        assert_eq!(valid.0.len(), 2);
+        assert_eq!(valid.0[0].exterior, vec![b, c, d, e, b].into());
+        assert_eq!(valid.0[0].interiors, vec![]);
+
+        assert_eq!(valid.0[1].exterior, vec![a, h, g, b, a].into());
+        assert_eq!(valid.0[1].interiors, vec![]);
+    }
+
 }
 
