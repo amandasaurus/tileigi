@@ -4,12 +4,12 @@ version = "0.6.0"
 authors = ["Rory McCann <rory@technomancy.org>"]
 
 [dependencies]
-mapbox_vector_tile = { git = "https://github.com/rory/rust-mapbox-vector-tile" }
+mapbox_vector_tile = "0.1.0"
 yaml-rust = "0.3"
 slippy-map-tiles = "0.14"
 postgres = "0.15.2"
 wkb = "0.2.0"
-geo = "0.7.1"
+geo = "0.7.3"
 clap = "2"
 serde_json = "1"
 users = "0.6.0"
@@ -21,6 +21,3 @@ separator = "0.3.1"
 
 [profile.release]
 debug=true
-
-[patch.crates-io]
-geo = { git = "https://github.com/rory/rust-geo.git", branch = "rory-everything" }
