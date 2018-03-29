@@ -1686,6 +1686,24 @@ mod test {
         assert_eq!(result[1], vec![(23225, 13212), (23206, 13220), (23214, 13203), (23246, 13189), (23251, 13210), (23224, 13230), (23225, 13212)].into());
     }
 
+    #[test]
+    fn dissolve_into_rings10() {
+        // b--c
+        // | /
+        // a
+        // | \
+        // e--d
+        let b = Point::new(0, 0); let c = Point::new(5, 0);
+        let a = Point::new(0, 5);
+        let e = Point::new(0, 10); let d = Point::new(5, 10);
+        let ls: LineString<_> = vec![b, c, a, d, e, a, b].into();
+        let result = dissolve_into_rings(ls);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], vec![a, d, e, a].into());
+        assert_eq!(result[1], vec![b, c, a, b].into());
+    }
+
+
 
     #[test]
     fn convert_rings_to_polygons1() {
