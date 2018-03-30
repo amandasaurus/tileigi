@@ -703,22 +703,24 @@ fn dissolve_into_rings(ls: LineString<i32>) -> Vec<LineString<i32>> {
     //println!("{}:{} outgoing_segments {:?}", file!(), line!(), outgoing_segments);
     //println!("{}:{} outgoing_segments w/ > 1 segment: {:?}", file!(), line!(), outgoing_segments.iter().filter_map(|(k, v)| if v.len() > 1 { Some((k, v)) } else { None }).collect::<Vec<_>>());
 
-    // loops: a Vec of Vec's. Each inner vec is 2 point indexes, and means 'there is a loop from
-    // this point to that point'
+    // loops: a Vec of Vec's. Each inner vec is 2+ point indexes, and means 'there is a loop from
+    // the start point to each of the other points'
     let mut loops: Vec<Vec<usize>> = outgoing_segments.into_iter().filter_map(|(_, v)| if v.len() > 1 { Some(v) } else { None }).collect();
     //println!("{}:{} loops {:?}", file!(), line!(), loops);
 
-    // If the linestring touches the first/last point, then this algoritm will result in a loop
-    // with 3 (or 4) numbers, [0, touching point idx, (touching point, ) last]. Make this into 2 (or 3) loops
-    //
     // This is a list of indices in loops where these problems occur
     let mut loop_with_extra_points = loops.iter().enumerate()
-            .filter_map(|(i, l)| if (l.len() == 3 || l.len() == 4) && l[0] == 0 && l[l.len()-1] == points.len()-1 { Some(i) } else { None })
+            .filter_map(|(i, l)| if l.len() == 3 || l.len() == 4 { Some(i) } else { None })
             .collect::<Vec<usize>>();
-    // 0 = nothing is strange, 1 = simple case of first/last point being 'touched'. >1 who knows?
-    assert!(loop_with_extra_points.len() == 0 || loop_with_extra_points.len() == 1);
-    if loop_with_extra_points.len() == 1 {
-        let single_loop = loops.swap_remove(loop_with_extra_points.remove(0));
+
+    // We use loops.remove(), which moves elements afterwards to the left, so any indexes
+    // would be different. If we do it from the back to the front, this is OK, and the indexes
+    // will still be valid.
+    loop_with_extra_points.sort();
+    loop_with_extra_points.reverse();
+    
+    for loop_index in loop_with_extra_points.into_iter() {
+        let single_loop = loops.remove(loop_index);
         match single_loop.len() {
             3 => {
                 loops.push(vec![single_loop[0], single_loop[1]]);
@@ -1703,6 +1705,48 @@ mod test {
         assert_eq!(result[1], vec![b, c, a, b].into());
     }
 
+    #[test]
+    fn dissolve_into_rings11() {
+        // b--c
+        // | /
+        // a
+        // |
+        // d
+        // | \
+        // f--e
+        let b = Point::new(0, 0); let c = Point::new(5, 0);
+        let a = Point::new(0, 5);
+        let d = Point::new(0, 10);
+        let e = Point::new(0, 15); let f = Point::new(5, 15);
+        let ls: LineString<_> = vec![b, c, a, d, e, f, d, a, b].into();
+        let result = dissolve_into_rings(ls);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], vec![a, d, e, a].into());
+        assert_eq!(result[1], vec![b, c, a, b].into());
+    }
+
+    #[test]
+    fn dissolve_into_rings12() {
+        // a---b
+        // |   |
+        // c-d-e
+        //   |
+        //   | h
+        //   |/|
+        //   f-g
+        //   |
+        //   i
+        let a = Point::new(0, 0);                           let b = Point::new(2, 0);
+        let c = Point::new(0, 1); let d = Point::new(1, 1); let e = Point::new(2, 1);
+                                  let h = Point::new(2, 2);
+        let f = Point::new(1, 3); let g = Point::new(2, 3);
+        let i = Point::new(1, 4);
+        let ls: LineString<_> = vec![a, c, d, f, g, h, f, i, f, d, e, b, a].into();
+        let result = dissolve_into_rings(ls);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], vec![f, g, h, f].into());
+        assert_eq!(result[1], vec![a, c, e, b, a].into());
+    }
 
 
     #[test]
