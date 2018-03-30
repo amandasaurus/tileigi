@@ -537,11 +537,8 @@ fn add_points_for_all_crossings(ls: &mut LineString<i32>) {
     if ls.0.len() <= 3 {
         return;
     }
-    //println!("\n\nXXX\nls {:?}\n", ls);
-    //println!("{}:{}", file!(), line!());
 
     loop {
-        //println!("{}:{} ls.0.len() {}", file!(), line!(), ls.0.len());
         let mut coords_to_insert = HashMap::new();
         // Keys are the point indexes.
         // Values are a Vec of new points to add after the point with that index.
@@ -678,7 +675,6 @@ fn add_points_for_all_crossings(ls: &mut LineString<i32>) {
             //println!("{}:{} We added {} new points to the line", file!(), line!(), offset);
         }
     }
-    //println!("{}:{} finished", file!(), line!());
 
 }
 
@@ -700,13 +696,10 @@ fn dissolve_into_rings(ls: LineString<i32>) -> Vec<LineString<i32>> {
         // rather than do a loop later
         outgoing_segments.entry((p.x(), p.y())).or_insert(vec![]).push(i);
     }
-    //println!("{}:{} outgoing_segments {:?}", file!(), line!(), outgoing_segments);
-    //println!("{}:{} outgoing_segments w/ > 1 segment: {:?}", file!(), line!(), outgoing_segments.iter().filter_map(|(k, v)| if v.len() > 1 { Some((k, v)) } else { None }).collect::<Vec<_>>());
 
     // loops: a Vec of Vec's. Each inner vec is 2+ point indexes, and means 'there is a loop from
     // the start point to each of the other points'
     let mut loops: Vec<Vec<usize>> = outgoing_segments.into_iter().filter_map(|(_, v)| if v.len() > 1 { Some(v) } else { None }).collect();
-    //println!("{}:{} loops {:?}", file!(), line!(), loops);
 
     // This is a list of indices in loops where these problems occur
     let mut loop_with_extra_points = loops.iter().enumerate()
@@ -763,12 +756,8 @@ fn dissolve_into_rings(ls: LineString<i32>) -> Vec<LineString<i32>> {
     // on, this sort-by-length should do it (since an outer loop will be longer than the inner one
     // it contains)
     loops.sort_by_key(|i| (i.len() as i32*-1, (i.last().unwrap()-i[0]), i[0]));
-    //println!("{};{} loops {:?}", file!(), line!(), loops);
-
-    //::print_geom_as_geojson(&Geometry::LineString(LineString(points.clone())), 4096.*8.);
 
     for loop_indexes in loops {
-        //assert!(loop_indexes.len() == 2);
         let start = *loop_indexes.first().unwrap();
         let end = *loop_indexes.last().unwrap();
         //let (start, end) = (loop_indexes[0], loop_indexes[1]);
@@ -776,7 +765,7 @@ fn dissolve_into_rings(ls: LineString<i32>) -> Vec<LineString<i32>> {
             // this has already been removed earlier in another loop
             continue;
         }
-        //println!("{};{} loop from {:?} to {:?}", file!(), line!(), start, end);
+    
 
         if start + 2 == end {
             // This is only 3 points, so it's a little spike
@@ -791,9 +780,7 @@ fn dissolve_into_rings(ls: LineString<i32>) -> Vec<LineString<i32>> {
         //points[start..end].iter_mut().map( set to true here? )
         new_ls.push(points[start].clone());
         for i in start+1..end {
-            //println!("looking at point i {} {:?}, point_unassigned[i] {:?}", i, points[i], point_unassigned[i]);
             if point_unassigned[i] {
-                //println!("\tadding point");
                 new_ls.push(points[i].clone());
                 point_unassigned[i] = false;
             }
@@ -802,7 +789,6 @@ fn dissolve_into_rings(ls: LineString<i32>) -> Vec<LineString<i32>> {
             // Any outer loops need at least one point at this, so don't save it
             //point_unassigned[end] = false;
             new_ls.push(points[end].clone());
-            //println!("{}:{} adding ls {:?}", file!(), line!(), new_ls);
             if let Some(new_ls) = simplify::remove_spikes_linestring(LineString(new_ls)) {
                 results.push(new_ls);
             }
