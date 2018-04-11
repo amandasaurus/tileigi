@@ -1432,6 +1432,21 @@ mod test {
 
     }
 
+    #[test]
+    fn make_valid6() {
+        let p: Geometry<_> = Polygon::new(vec![(3045, 3309), (3044, 3308), (3031, 3316), (3039, 3304), (3026, 3314), (3045, 3309)].into(), vec![]).into();
+        assert!(!is_valid(&p));
+        let p = make_valid(p);
+        assert!(p.is_some());
+        let p = p.unwrap();
+        assert!(is_valid(&p));
+        assert_eq!(p, Geometry::MultiPolygon(MultiPolygon(vec![
+                        Polygon::new(vec![(3033, 3312), (3039, 3304), (3026, 3314), (3033, 3312)].into(), vec![]),
+                        Polygon::new(vec![(3041, 3310), (3033, 3312), (3031, 3316), (3041, 3310)].into(), vec![]),
+                        Polygon::new(vec![(3045, 3309), (3044, 3308), (3041, 3310), (3045, 3309)].into(), vec![]),
+                        ])));
+    }
+
     // Helper function that tests that applying func to in_obj doesn't result in in_obj changing
     fn test_no_change<T, F>(func: F, mut in_obj: T)
         where F: Fn(&mut T), T: Clone+Debug+PartialEq
