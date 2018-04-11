@@ -1396,7 +1396,7 @@ mod test {
         };
 
         //println!("{:?}", new_mp);
-        assert_eq!(new_mp.0.len(), 1);
+        assert_eq!(new_mp.0.len(), 1, "{:?}", new_mp.0);
         let poly = new_mp.0.remove(0);
         assert_eq!(poly.exterior, vec![a, d, c, b, a].into());
         assert_eq!(poly.interiors.len(), 1);
