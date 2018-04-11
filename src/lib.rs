@@ -29,6 +29,7 @@ use std::collections::{HashSet, HashMap};
 use std::time::Instant;
 use std::borrow::{Cow, Borrow};
 use std::rc::Rc;
+use std::fmt::Write;
 
 use std::thread;
 use std::sync::mpsc::{channel, sync_channel, Sender, SyncSender};
@@ -1071,6 +1072,12 @@ fn y_to_lat<T: CoordinateType+Into<f64>>(y: T, extent: f64) -> f64 {
 }
 
 fn print_geom_as_geojson<T: CoordinateType+Into<f64>>(geom: &Geometry<T>, extent: f64) {
+    println!("{}", geom_as_geojson(geom, extent));
+}
+
+fn geom_as_geojson<T: CoordinateType+Into<f64>>(geom: &Geometry<T>, extent: f64) -> String {
+    let mut output = String::new();
+
     let geojson = |ls: &LineString<T>| -> String {
         format!("[{}]", ls.0.iter().map(|p| format!("[{}, {}]", x_to_lon(p.x(), extent), y_to_lat(p.y(), extent))).collect::<Vec<_>>().join(", "))
     };
@@ -1101,48 +1108,51 @@ fn print_geom_as_geojson<T: CoordinateType+Into<f64>>(geom: &Geometry<T>, extent
         }).collect::<Vec<_>>().join(", ")
     };
 
-    print!("\n{{\"type\":\"FeatureCollection\", \"features\":[");
+    write!(output, "\n{{\"type\":\"FeatureCollection\", \"features\":[").unwrap();
     match *geom {
         Geometry::Polygon(ref poly) => {
-            print!("{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"Polygon\", \"coordinates\": [");
-            print!("{}", geojson(&poly.exterior));
+            write!(output, "{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"Polygon\", \"coordinates\": [").unwrap();
+            write!(output, "{}", geojson(&poly.exterior)).unwrap();
             if !poly.interiors.is_empty() {
-                print!(", ");
-                print!("{}", poly.interiors.iter().map(|int| geojson(&int)).collect::<Vec<_>>().join(", "));
+                write!(output, ", ").unwrap();
+                write!(output, "{}", poly.interiors.iter().map(|int| geojson(&int)).collect::<Vec<_>>().join(", ")).unwrap();
             }
-            print!("]}}}}");
+            write!(output, "]}}}}").unwrap();
+            write!(output, ", {}", points_numbered(&poly.exterior.0)).unwrap();
         },
         Geometry::MultiPolygon(ref mp) => {
-            print!("{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"MultiPolygon\", \"coordinates\": [");
+            write!(output, "{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"MultiPolygon\", \"coordinates\": [").unwrap();
             let mut first = true;
             for poly in mp.0.iter() {
-                if !first { print!(", "); }
-                print!("[");
-                print!("{}", geojson(&poly.exterior));
+                if !first { write!(output, ", ").unwrap(); }
+                write!(output, "[").unwrap();
+                write!(output, "{}", geojson(&poly.exterior)).unwrap();
                 if !poly.interiors.is_empty() {
-                    print!(", ");
-                    print!("{}", poly.interiors.iter().map(|int| geojson(&int)).collect::<Vec<_>>().join(", "));
+                    write!(output, ", ").unwrap();
+                    write!(output, "{}", poly.interiors.iter().map(|int| geojson(&int)).collect::<Vec<_>>().join(", ")).unwrap();
                 }
-                print!("]");
+                write!(output, "]").unwrap();
                 first = false;
             }
-            print!("]}}}}");
+            write!(output, "]}}}}").unwrap();
         },
         Geometry::LineString(ref ls) => {
-            print!("{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"LineString\", \"coordinates\": ");
-            print!("{}", geojson(&ls));
-            print!("}}}}");
-            print!(", {}", points_numbered(&ls.0));
+            write!(output, "{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"LineString\", \"coordinates\": ").unwrap();
+            write!(output, "{}", geojson(&ls)).unwrap();
+            write!(output, "}}}}").unwrap();
+            write!(output, ", {}", points_numbered(&ls.0)).unwrap();
         },
         Geometry::MultiLineString(ref mls) => {
-            print!("{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"MultiLineString\", \"coordinates\": [");
-            print!("{}", mls.0.iter().map(geojson).collect::<Vec<_>>().join(", "));
-            print!("]}}}}");
+            write!(output, "{{\"type\": \"Feature\", \"properties\":{{}}, \"geometry\":{{ \"type\":\"MultiLineString\", \"coordinates\": [").unwrap();
+            write!(output, "{}", mls.0.iter().map(geojson).collect::<Vec<_>>().join(", ")).unwrap();
+            write!(output, "]}}}}").unwrap();
         },
 
         _ => unimplemented!(),
     }
-    println!("]}}\n");
+    write!(output, "]}}\n").unwrap();
+
+    output
 }
 
 #[derive(Debug)]
