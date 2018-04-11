@@ -11,8 +11,6 @@ use std::hash::Hash;
 
 use ::simplify;
 
-use fraction::Fraction;
-
 pub fn is_valid(geom: &Geometry<i32>) -> bool {
     match *geom {
         Geometry::LineString(ref ls) => is_linestring_valid(ls),

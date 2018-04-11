@@ -58,7 +58,6 @@ use validity::{is_valid, is_valid_skip_expensive};
 mod printer;
 mod fileio;
 mod simplify;
-mod fraction;
 
 use fileio::{FileIOMessage,TileDestination};
 

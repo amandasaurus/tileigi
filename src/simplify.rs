@@ -2,8 +2,6 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::ops::{DivAssign,Rem,Mul,AddAssign};
 
-use fraction::Fraction;
-
 use geo::*;
 
 /// We have a fraction a²/b², but we currently only have a & b². We want to reduce this fraction by
@@ -34,48 +32,6 @@ fn distance_sqr(a: &Point<i32>, b: &Point<i32>) -> i64 {
     assert!(delta_y >= 0);
 
     (delta_x*delta_x + delta_y*delta_y)
-}
-
-// perpendicular distance from a point to a line
-fn point_line_distance_sqr(point: &Point<i32>, start: &Point<i32>, end: &Point<i32>) -> Fraction<i64>
-{
-    if start == end {
-        Fraction::new(distance_sqr(point, start), 1)
-    } else {
-        let denominator = distance_sqr(start, end);
-        assert!(denominator != 0);
-        if denominator < 0 {
-            eprintln!("point {:?} start {:?} end {:?}", point, start, end);
-            eprintln!("denominator {:?}", denominator);
-            panic!();
-        }
-
-        assert!(denominator > 0);
-
-        let start_x = start.y() as i64;
-        let start_y = start.y() as i64;
-        let end_x = end.y() as i64;
-        let end_y = end.y() as i64;
-        let point_x = point.x() as i64;
-        let point_y = point.y() as i64;
-        // point = (x0, y0)
-        // |(y2 - y1)x0 - (x2 - x1)y0 + x2y1 - y2x1|
-        // |a - b + c - d|
-        // |a+c - (b+d)|
-        // which we turn into a+c compared with b+d to get the diff
-        let ac: i64 = (end_y - start_y)*point_x + end_x*start_y;
-        let bd: i64 = (end_x - start_x)*point_y + end_y*start_x;
-        let numerator: i64 = if ac > bd { ac - bd } else { bd - ac };
-
-        //println!("{} L {} numerator {} denominator {}", file!(), line!(), numerator, denominator);
-        let (numerator, denominator) = reduce_fraction_sqr(numerator, denominator);
-        //println!("{} L {} numerator {} denominator {}", file!(), line!(), numerator, denominator);
-
-        assert!(numerator.checked_mul(numerator).is_some(), "{} L {}\npoint {:?} start {:?} end {:?}\nnumerator {:?}\nac {:?} bd {:?}", file!(), line!(), point, start, end, numerator, ac, bd);
-        let numerator = numerator*numerator;
-
-        Fraction::new(numerator, denominator)
-    }
 }
 
 // Ramer-Douglas-Peucker line simplification algorithm
