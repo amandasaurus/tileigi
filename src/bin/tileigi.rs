@@ -2,6 +2,9 @@ extern crate slippy_map_tiles;
 #[macro_use]
 extern crate clap;
 
+extern crate log;
+extern crate env_logger;
+
 extern crate tileigi;
 
 use std::path::{PathBuf, Path};
@@ -11,6 +14,7 @@ use slippy_map_tiles::BBox;
 use tileigi::*;
 
 fn main() {
+    env_logger::init();
 
     let matches = App::new("tileigi")
         .version(crate_version!())

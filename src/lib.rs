@@ -10,6 +10,9 @@ extern crate geo;
 #[macro_use]
 extern crate serde_json;
 
+#[macro_use]
+extern crate log;
+
 extern crate users;
 extern crate num_traits;
 extern crate rusqlite;
@@ -880,6 +883,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
                                 validity::ensure_polygon_orientation(&mut g);
                                 Some((t, g))
                             } else {
+                                debug!("Geom isn't valid");
                                 None
                             }
                         },
