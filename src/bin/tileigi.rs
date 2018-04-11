@@ -8,13 +8,41 @@ extern crate env_logger;
 extern crate tileigi;
 
 use std::path::{PathBuf, Path};
+use std::io::Write;
+
 use clap::{Arg, App, AppSettings, ArgGroup};
 use slippy_map_tiles::BBox;
+use env_logger::{Color};
+use log::Level;
 
 use tileigi::*;
 
 fn main() {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .format(|buf, record| {
+            let level = record.level();
+            let mut level_style = buf.style();
+
+            match level {
+                Level::Trace => level_style.set_color(Color::White),
+                Level::Debug => level_style.set_color(Color::Blue),
+                Level::Info => level_style.set_color(Color::Green),
+                Level::Warn => level_style.set_color(Color::Yellow),
+                Level::Error => level_style.set_color(Color::Red).set_bold(true),
+            };
+
+            write!(buf, "{:>5} ", level_style.value(level)).unwrap();
+
+            let ts = buf.timestamp();
+            write!(buf, "{}: ", ts).unwrap();
+            write!(buf, "{}: ", record.module_path().unwrap_or("UNKNOWN_MOD")).unwrap();
+            write!(buf, "{}:{} ", record.file().unwrap_or("UNKNOWN_FILE"), record.line().map(|l| format!("{}", l)).unwrap_or("UNKNOWN_LINE".to_string())).unwrap();
+
+            writeln!(buf, "{}", record.args()).unwrap();
+
+            Ok(())
+        })
+        .init();
 
     let matches = App::new("tileigi")
         .version(crate_version!())
