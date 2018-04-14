@@ -10,6 +10,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use ::simplify;
+use ::geom_as_geojson;
 
 pub fn is_valid(geom: &Geometry<i32>) -> bool {
     match *geom {
@@ -468,11 +469,16 @@ pub fn make_valid(mut geom: Geometry<i32>) -> Option<Geometry<i32>> {
         return Some(geom);
     }
 
-    match geom {
+    let valid_geom = match geom {
         Geometry::Polygon(p) => make_polygon_valid(p).map(Geometry::MultiPolygon),
         Geometry::MultiPolygon(mp) => make_multipolygon_valid(mp).map(Geometry::MultiPolygon),
         x => Some(x),
-    }
+    };
+
+    // Sanity checking
+    debug_assert_valid_geom(&valid_geom);
+
+    valid_geom
 }
 
 fn make_multipolygon_valid(mut mp: MultiPolygon<i32>) -> Option<MultiPolygon<i32>> {
@@ -2010,3 +2016,39 @@ mod test {
 
 }
 
+
+/// debug_assert that this geometry is valid, and if invalid, print out information on it.
+/// if None, then does nothing
+#[cfg(debug_assertions)]
+fn debug_assert_valid_geom(geom: &Option<Geometry<i32>>) {
+    let geom = match geom {
+        &None => return,
+        &Some(ref geom) => geom,
+    };
+
+    if !is_valid(&geom) {
+        let geom = geom.clone();
+        error!("make_valid trying to return an invalid geometry");
+        error!("geometry: {:?}", geom);
+        error!("geometry (geojson):\n{}", geom_as_geojson(&geom, 4096.*8.));
+
+
+        match geom {
+            Geometry::MultiPolygon(mp) => {
+                error!("mp");
+                for p in mp.0.into_iter().map(Geometry::Polygon) {
+                    if !is_valid(&p) {
+                        error!("invalid polygon in multipolygon:\n{:?}\n{}", p, geom_as_geojson(&p, 4096.*8.));
+                    }
+                }
+            },
+            _ => {},
+        }
+
+        panic!();
+    }
+}
+
+/// Stub
+#[cfg(not(debug_assertions))]
+fn debug_assert_valid_geom(geom: &Option<Geometry<i32>>) {}
