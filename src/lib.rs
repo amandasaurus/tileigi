@@ -872,6 +872,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
 
         let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
             |(t, g)| match g {
+                None => None,
                 // TODO probably could use .map/.and_then here
                 Some(mut g) => {
                     //debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
@@ -889,7 +890,6 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
                         },
                     }
                 },
-                None => None,
             }).collect();
 
         // If there are >1 tiles, then we don't want to clone the properties everytime. So share
