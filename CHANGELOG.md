@@ -1,3 +1,22 @@
+<a name="v0.7.0"></a>
+## v0.7.0 (2018-04-15)
+
+
+#### Bug Fixes
+
+*   Make less invalid polygons and correctly dissolve into rings ([83476e95](83476e95))
+
+#### Features
+
+*   make_valid: work on linestrings ([45da9a65](45da9a65))
+*   use better log level ([5b57a5c3](5b57a5c3))
+*   Drop invalid geometries that are created by make_valid ([ee120fac](ee120fac))
+*   Debug assert that geoms from make_valid are valid ([ab34b946](ab34b946))
+*   print file names & line numbers on logs ([ba3fdf92](ba3fdf92))
+*   Allow converting to geojson as a string, so it could be logged ([f3fcc301](f3fcc301))
+
+
+
 <a name="v0.6.0"></a>
 ## v0.6.0 (2018-02-28)
 
