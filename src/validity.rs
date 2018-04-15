@@ -546,7 +546,6 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
     let mut result = Geometry::MultiPolygon(result);
     ensure_polygon_orientation(&mut result);
 
-    //println!("{} L {}", file!(), line!());
     if let Geometry::MultiPolygon(mp) = result {
         trace!("make_rings_valid: Finishing with a {} polygon MultiPolygon", mp.0.len());
 
