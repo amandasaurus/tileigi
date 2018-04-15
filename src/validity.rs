@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use num_traits::Signed;
 use std::fmt::Debug;
 use std::hash::Hash;
+use log;
 
 use ::simplify;
 use ::geom_as_geojson;
@@ -541,7 +542,18 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
     //println!("{} L {}", file!(), line!());
     if let Geometry::MultiPolygon(mp) = result {
         trace!("make_rings_valid: Finishing with a {} polygon MultiPolygon", mp.0.len());
-        return Some(mp);
+
+        let valid_polys =  mp.into_iter().enumerate().filter_map(|(i, p)| if is_polygon_valid(&p) {
+            Some(p)
+        } else {
+            // FIXME fix the code so it doesn't return invalid polygons
+            warn!("make_valid has created an invalid polygon (poly {}). Dropping", i);
+            if log_enabled!(log::Level::Debug) {
+                debug!("Invalid polygon {}\n{:?}\n{}\n", i, p, geom_as_geojson(&Geometry::Polygon(p.clone()), 4096.*8.));
+            }
+            None
+        }).collect::<Vec<Polygon<_>>>();
+        return Some(MultiPolygon(valid_polys));
     } else {
         unreachable!()
     }
