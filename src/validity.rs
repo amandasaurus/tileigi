@@ -1552,6 +1552,13 @@ mod test {
     }
 
     #[test]
+    fn add_points_for_all_crossings6() {
+        expected_results(add_points_for_all_crossings,
+                         vec![(3045, 3309), (3044, 3308), (3031, 3316), (3039, 3304), (3026, 3314), (3045, 3309)].into(),
+                         vec![(3045, 3309), (3044, 3308), (3041, 3310), (3031, 3316), (3033, 3312), (3039, 3304), (3026, 3314), (3033, 3312), (3041, 3310), (3045, 3309)].into() )
+    }
+
+    #[test]
     fn dissolve_into_rings1() {
         test_no_change_own_vec(dissolve_into_rings, vec![(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)].into());
 
