@@ -55,6 +55,6 @@ Sample command:
             --threads <threads>                  Number of concurrent generation threads to run [default: 1]
 
 
-It is still in early days, and barely beta qualtiy, and the dependencies can be funny.
+It is still in early days, and barely beta qualtiy.
 
 Copyright under the GNU Affero GPL v3 (or later) (see the file link:LICENCE[LICENCE])
