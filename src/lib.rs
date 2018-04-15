@@ -884,7 +884,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
                                 validity::ensure_polygon_orientation(&mut g);
                                 Some((t, g))
                             } else {
-                                debug!("Geom isn't valid");
+                                warn!("make_valid returned an invalid geometry: {:?}", g);
                                 None
                             }
                         },
