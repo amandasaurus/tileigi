@@ -461,13 +461,20 @@ fn intersection(x1: i32, y1: i32, x2: i32, y2: i32, x3: i32, y3: i32, x4: i32, y
 }
 
 pub fn make_valid(mut geom: Geometry<i32>) -> Option<Geometry<i32>> {
+    trace!("make_valid on {}", format!("{:?}", geom)[..20].to_string());
     let mut geom = match simplify::remove_unneeded_points(geom) {
-        None => { return None; },
+        None => {
+            trace!("After removing unneeded points, geom is None, early return");
+            return None;
+        },
         Some(g) => g,
     };
     if is_valid(&geom) {
+        trace!("input geometry is already valid, early return");
         return Some(geom);
     }
+
+    trace!("geometry to make valid (geojson):\n{}", geom_as_geojson(&geom, 4096.*8.));
 
     let valid_geom = match geom {
         Geometry::Polygon(p) => make_polygon_valid(p).map(Geometry::MultiPolygon),
@@ -482,6 +489,7 @@ pub fn make_valid(mut geom: Geometry<i32>) -> Option<Geometry<i32>> {
 }
 
 fn make_multipolygon_valid(mut mp: MultiPolygon<i32>) -> Option<MultiPolygon<i32>> {
+    trace!("making multipolygon valid");
     let MultiPolygon( polygons ) = mp;
 
     let rings: Vec<LineString<_>> = polygons.into_iter().flat_map(|p| {
@@ -504,17 +512,22 @@ fn make_polygon_valid(mut p: Polygon<i32>) -> Option<MultiPolygon<i32>> {
 }
 
 fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>> {
+    trace!("make_rings_valid: Starting with {} ring(s)", rings.len());
 
     let mut new_rings: Vec<LineString<_>> = Vec::with_capacity(rings.len());
     for mut ring in rings.into_iter() {
-        //println!("{} L {}", file!(), line!());
+        trace!("Ring has {} points before adding", ring.0.len());
         add_points_for_all_crossings(&mut ring);
-        //println!("{} L {}", file!(), line!());
+        trace!("Ring has {} points after adding", ring.0.len());
+
         let mut these_rings = dissolve_into_rings(ring);
+        trace!("This ring has been dissolved into {} ring(s)", these_rings.len());
+
         new_rings.append(&mut these_rings);
     }
 
     let rings = new_rings;
+    trace!("Now have {} ring(s)", rings.len());
     
     let result = match convert_rings_to_polygons(rings) {
         None => { return None; },
@@ -527,6 +540,7 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
 
     //println!("{} L {}", file!(), line!());
     if let Geometry::MultiPolygon(mp) = result {
+        trace!("make_rings_valid: Finishing with a {} polygon MultiPolygon", mp.0.len());
         return Some(mp);
     } else {
         unreachable!()
@@ -955,11 +969,10 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
     if rings.len() == 1 {
         return Some(MultiPolygon(vec![Polygon::new(rings.remove(0), vec![])]));
     }
-
+    trace!("convert_rings_to_polygons starting with {} rigns", rings.len());
 
     let rings_with_type = calc_rings_ext_int(rings);
 
-    //println!("{} rings_with_type {:?}", line!(), rings_with_type);
 
     // Do a simple case when there are only 2 rings?
     let mut exteriors = Vec::new();
@@ -972,9 +985,11 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
         }
     }
     assert!(!(exteriors.is_empty() && interiors.is_empty()));
+    trace!("Have {} exteriors and {} interiors", exteriors.len(), interiors.len());
 
     if exteriors.is_empty() {
         debug_assert!(interiors.is_empty());
+        warn!("Unsupported/invalid case? No exterior rings ({} interiors)", interiors.len());
         // FIXME implement this properly, esp if there are interiors
         return None;
     }
@@ -1001,6 +1016,7 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
         
     } else {
         if interiors.is_empty() {
+            trace!("There are no interior rings");
             // nothing to do
         } else {
             // we need to figure out which exterior each interior is in.
@@ -1011,6 +1027,7 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
 
             // Just skip it for now
             // FIXME implement this
+            warn!("Unimplemented code. {} exteriors, and {} interiors. Dropping all interiors", polygons.len(), interiors.len());
         }
     }
 
