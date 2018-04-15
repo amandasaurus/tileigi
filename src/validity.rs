@@ -994,17 +994,6 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
         return None;
     }
 
-    // this is a simple hack, take largest poly
-    //exteriors.sort_unstable_by_key(|p| -1 * p.0.len() as i64);
-    //let ring = exteriors.remove(0);
-    ////println!("ring {}", ring.0.len());
-    //return MultiPolygon(vec![Polygon::new(ring, vec![])]);
-
-    
-    // FIXME implement this
-    // All interiors?!
-    //assert!(!(exteriors.is_empty() && !interiors.is_empty()), "convert_rings_to_polygons {}\ninteriors {:?}\nexteriors {:?}\nno exteriors, but interiors", line!(), interiors, exteriors);
-
     let mut polygons: Vec<_> = exteriors.into_iter().map(|p| Polygon::new(p, vec![])).collect();
 
     // we need to calculate the what exterior that each interior is in
@@ -1131,6 +1120,42 @@ fn is_cw(ls: &LineString<i32>) -> bool {
 fn is_ccw(ls: &LineString<i32>) -> bool {
     twice_linestring_area(ls) > 0
 }
+
+
+/// debug_assert that this geometry is valid, and if invalid, print out information on it.
+/// if None, then does nothing
+#[cfg(debug_assertions)]
+fn debug_assert_valid_geom(geom: &Option<Geometry<i32>>) {
+    let geom = match geom {
+        &None => return,
+        &Some(ref geom) => geom,
+    };
+
+    if !is_valid(&geom) {
+        let geom = geom.clone();
+        error!("make_valid trying to return an invalid geometry");
+        error!("geometry: {:?}", geom);
+        error!("geometry (geojson):\n{}", geom_as_geojson(&geom, 4096.*8.));
+
+
+        match geom {
+            Geometry::MultiPolygon(mp) => {
+                for p in mp.0.into_iter().map(Geometry::Polygon) {
+                    if !is_valid(&p) {
+                        error!("invalid polygon in multipolygon:\n{:?}\n{}", p, geom_as_geojson(&p, 4096.*8.));
+                    }
+                }
+            },
+            _ => {},
+        }
+
+        panic!();
+    }
+}
+
+/// Stub
+#[cfg(not(debug_assertions))]
+fn debug_assert_valid_geom(geom: &Option<Geometry<i32>>) {}
 
 
 #[cfg(test)]
@@ -2032,40 +2057,3 @@ mod test {
     }
 
 }
-
-
-/// debug_assert that this geometry is valid, and if invalid, print out information on it.
-/// if None, then does nothing
-#[cfg(debug_assertions)]
-fn debug_assert_valid_geom(geom: &Option<Geometry<i32>>) {
-    let geom = match geom {
-        &None => return,
-        &Some(ref geom) => geom,
-    };
-
-    if !is_valid(&geom) {
-        let geom = geom.clone();
-        error!("make_valid trying to return an invalid geometry");
-        error!("geometry: {:?}", geom);
-        error!("geometry (geojson):\n{}", geom_as_geojson(&geom, 4096.*8.));
-
-
-        match geom {
-            Geometry::MultiPolygon(mp) => {
-                error!("mp");
-                for p in mp.0.into_iter().map(Geometry::Polygon) {
-                    if !is_valid(&p) {
-                        error!("invalid polygon in multipolygon:\n{:?}\n{}", p, geom_as_geojson(&p, 4096.*8.));
-                    }
-                }
-            },
-            _ => {},
-        }
-
-        panic!();
-    }
-}
-
-/// Stub
-#[cfg(not(debug_assertions))]
-fn debug_assert_valid_geom(geom: &Option<Geometry<i32>>) {}
