@@ -480,6 +480,13 @@ pub fn make_valid(mut geom: Geometry<i32>) -> Option<Geometry<i32>> {
     let valid_geom = match geom {
         Geometry::Polygon(p) => make_polygon_valid(p).map(Geometry::MultiPolygon),
         Geometry::MultiPolygon(mp) => make_multipolygon_valid(mp).map(Geometry::MultiPolygon),
+        Geometry::LineString(ls) => {
+            if ls.0.len() < 2 {
+                None
+            } else {
+                Some(Geometry::LineString(ls))
+            }
+        },
         x => Some(x),
     };
 
