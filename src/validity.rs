@@ -1027,12 +1027,6 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
             // nothing to do
         } else {
             // we need to figure out which exterior each interior is in.
-            //eprintln!("polygons.len() {:?}", polygons.len());
-            //eprintln!("polygons {:?}", polygons);
-            //eprintln!("interiors {:?}", interiors);
-            //unimplemented!()
-
-            // Just skip it for now
             // FIXME implement this
             warn!("Unimplemented code. {} exteriors, and {} interiors. Dropping all interiors", polygons.len(), interiors.len());
         }
