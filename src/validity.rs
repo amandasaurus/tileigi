@@ -524,14 +524,38 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
 
     let mut new_rings: Vec<LineString<_>> = Vec::with_capacity(rings.len());
     for mut ring in rings.into_iter() {
-        trace!("Ring has {} points before adding", ring.0.len());
-        add_points_for_all_crossings(&mut ring);
-        trace!("Ring has {} points after adding", ring.0.len());
+        let mut rings_to_process = vec![ring];
 
-        let mut these_rings = dissolve_into_rings(ring);
-        trace!("This ring has been dissolved into {} ring(s)", these_rings.len());
+        // Sometimes when adding points for crossing, we can make a linestring which has a self
+        // intersection, but there is no points added for that crossing. Repeadidly run this code
+        // on the rings we have until we get no added points, then we know we're OK.
+        // This is probably a little ineffecient. A better solution is to fix the
+        // add_points_for_all_crossings so that we don't have to run it repeatidly
+        // FIXME check if we need to run dissolve_into_rings a lot, or can we just run the inner
+        // for loop?
+        let mut added_points = false;
+        loop {
+            if !added_points { break; }
+            added_points = false;
 
-        new_rings.append(&mut these_rings);
+            for mut ring in rings_to_process.iter_mut() {
+                let old_num_points = ring.0.len();
+                add_points_for_all_crossings(&mut ring);
+                debug_assert!(ring.0.len() >= old_num_points);
+                if ring.0.len() != old_num_points {
+                    // we have added points, so we need to go through the loop again, to ensure
+                    // that all the rings have points for crossing.
+                    added_points = true;
+                }
+                trace!("Ring has {} points after adding", ring.0.len());
+            }
+
+            let new_rings_to_process = rings_to_process.drain(..).flat_map(|ring| dissolve_into_rings(ring).into_iter()).collect::<Vec<LineString<i32>>>();
+            ::std::mem::replace(&mut rings_to_process, new_rings_to_process);
+            trace!("This ring has been dissolved into {} ring(s)", rings_to_process.len());
+        }
+
+        new_rings.extend(rings_to_process.into_iter());
     }
 
     let rings = new_rings;
