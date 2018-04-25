@@ -980,7 +980,7 @@ fn calc_rings_ext_int<T: CoordinateType+Debug+Ord>(rings: Vec<LineString<T>>) ->
 }
 
 /// This will look at what rings are inside other rings.
-fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineString<T>>) -> Option<MultiPolygon<T>> {
+fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord+Into<f64>>(mut rings: Vec<LineString<T>>) -> Option<MultiPolygon<T>> {
     if rings.is_empty() {
         return None;
     }
@@ -1027,8 +1027,8 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord>(mut rings: Vec<LineStr
             // nothing to do
         } else {
             // we need to figure out which exterior each interior is in.
-            // FIXME implement this
-            warn!("Unimplemented code. {} exteriors, and {} interiors. Dropping all interiors", polygons.len(), interiors.len());
+            //warn!("Unimplemented code. {} exteriors, and {} interiors. Dropping all interiors", polygons.len(), interiors.len());
+            distribute_interiors(&mut polygons, interiors);
         }
     }
 
@@ -1133,6 +1133,38 @@ fn is_ccw(ls: &LineString<i32>) -> bool {
     twice_linestring_area(ls) > 0
 }
 
+fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mut Vec<Polygon<T>>, mut interiors: Vec<LineString<T>>) {
+    debug_assert!(polygons.iter().all(|p| p.interiors.len() == 0), "Invalid argument: polygons should have no interiors already");
+    debug_assert!((polygons.is_empty() && interiors.is_empty()) || !polygons.is_empty(), "Invalid argument: Can't specify interiors without also polygons");
+    if polygons.is_empty() || interiors.is_empty() {
+        return;
+    }
+    //debug_assert!(interiors.iter().all(|i| is_cw(i))); // figure out which is which
+    
+    if polygons.len() == 1 {
+        ::std::mem::replace(&mut polygons[0].interiors, interiors);
+        return;
+    }
+
+    // TODO implement this check
+    //debug_assert!(polygons.iter().all(|p| interiors.iter().all(|i| !intersects(i, p.exterior))));
+
+    // Stupid quick hack, convert things to floats and use the geo library. kinda defeats all the
+    // stuff of doing it in integers, but oh well.
+    let mut polygons_f: Vec<Polygon<f64>> = polygons.iter().map(|p| p.map_coords(&|&(x, y)| (x.into(), y.into()))).collect();
+    let mut interiors_f: Vec<LineString<f64>> = interiors.iter().map(|l| l.map_coords(&|&(x, y)| (x.into(), y.into()))).collect();
+    
+    for (interior_f, interior) in interiors_f.into_iter().zip(interiors.into_iter()) {
+        for (polygon_f, polygon) in polygons_f.iter_mut().zip(polygons.iter_mut()) {
+            if polygon_f.intersects(&interior_f) {
+                polygon.interiors.push(interior);
+                break;
+            }
+        }
+    }
+
+
+}
 
 /// debug_assert that this geometry is valid, and if invalid, print out information on it.
 /// if None, then does nothing
@@ -2074,5 +2106,99 @@ mod test {
         assert_eq!(valid.0[1].exterior, vec![a, h, g, b, a].into());
         assert_eq!(valid.0[1].interiors, vec![]);
     }
+
+    #[test]
+    fn distribute_interiors1() {
+        assert_eq!(distribute_interiors::<i32>(Vec::new(), Vec::new()), Vec::new());
+        
+        // a-----b
+        // | g-h |
+        // e f | |
+        // | j-i |
+        // d-----c
+
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+        let e = Point::new(0, 2); let f = Point::new(2, 2);
+        let g = Point::new(2, 1); let h = Point::new(4, 1);
+        let i = Point::new(4, 3); let j = Point::new(2, 3);
+        
+        let unit_square: LineString<_> = vec![a, b, c, d, a].into();
+        let inner_square: LineString<_> = vec![g, h, i, j, g].into();
+
+        assert_eq!(distribute_interiors::<i32>(vec![Polygon::new(unit_square.clone(), vec![])], vec![]), vec![Polygon::new(unit_square.clone(), vec![])]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn distribute_interiors2() {
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+        
+        let unit_square: LineString<_> = vec![a, b, c, d, a].into();
+
+        distribute_interiors::<i32>(vec![], vec![unit_square.clone()]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn distribute_interiors3() {
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+        let e = Point::new(0, 2); let f = Point::new(2, 2);
+        let g = Point::new(2, 1); let h = Point::new(4, 1);
+        let i = Point::new(4, 3); let j = Point::new(2, 3);
+        
+        let unit_square: LineString<_> = vec![a, b, c, d, a].into();
+        let inner_square: LineString<_> = vec![g, h, i, j, g].into();
+
+        distribute_interiors::<i32>(vec![Polygon::new(unit_square, vec![inner_square])], vec![]);
+    }
+
+    #[test]
+    fn distribute_interiors4() {
+        // a-----b
+        // | g-h |
+        // e f | |
+        // | j-i |
+        // d-----c
+
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+        let e = Point::new(0, 2); let f = Point::new(2, 2);
+        let g = Point::new(2, 1); let h = Point::new(4, 1);
+        let i = Point::new(4, 3); let j = Point::new(2, 3);
+        
+        let unit_square: LineString<_> = vec![a, b, c, d, a].into();
+        let inner_square: LineString<_> = vec![g, h, i, j, g].into();
+
+        assert_eq!(distribute_interiors::<i32>(vec![Polygon::new(unit_square.clone(), vec![])], vec![inner_square.clone()]), vec![Polygon::new(unit_square.clone(), vec![inner_square.clone()])]);
+    }
+
+    #[test]
+    fn distribute_interiors5() {
+        // a-----b   k---l
+        // | g-h |   |   |
+        // | | | |   m---n
+        // | j-i |
+        // d-----c
+
+        let a = Point::new(0, 0); let b = Point::new(6, 0);
+        let c = Point::new(6, 4); let d = Point::new(0, 4);
+
+        let g = Point::new(2, 1); let h = Point::new(4, 1);
+        let i = Point::new(4, 3); let j = Point::new(2, 3);
+
+        let k = Point::new(10, 0); let l = Point::new(12, 0);
+        let m = Point::new(10, 2); let n = Point::new(12, 2);
+
+        
+        let unit_square: LineString<_> = vec![a, b, c, d, a].into();
+        let inner_square: LineString<_> = vec![g, h, i, j, g].into();
+        let square_on_right: LineString<_> = vec![k, l, n, m, k].into();
+
+        assert_eq!(distribute_interiors::<i32>(vec![Polygon::new(unit_square.clone(), vec![]), Polygon::new(square_on_right.clone(), vec![])], vec![inner_square.clone()]), vec![Polygon::new(unit_square.clone(), vec![inner_square.clone()]), Polygon::new(square_on_right.clone(), vec![])]);
+    }
+
 
 }
