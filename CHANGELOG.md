@@ -1,3 +1,16 @@
+<a name="v0.8.0"></a>
+## v0.8.0 (2018-05-10)
+
+
+#### Bug Fixes
+
+*   Fix interior rings of polygons with a quick hack, which probably slows things down. ([4547a007](4547a007))
+* **validity:**
+  *  Fix my loop, was breaking too early ([5a3bab3e](5a3bab3e))
+  *  hack to ensure we don't get self intersecting lines ([967f040c](967f040c))
+
+
+
 <a name="v0.7.0"></a>
 ## v0.7.0 (2018-04-15)
 

@@ -1,6 +1,6 @@
 [package]
 name = "tileigi"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Rory McCann <rory@technomancy.org>"]
 
 [dependencies]
