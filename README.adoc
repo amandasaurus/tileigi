@@ -1,9 +1,13 @@
 = tileigi: Let us Tile!
 
-tileigi generates vector tiles from a PostgreSQL/PostGIS database. It's goals
-are to be as fast as possible, and as easy to install as possible.
+tileigifootnote:[In Irish, -igí suffix is used for the plural imperitive.
+"tile" in Irish means plank of a boat, if we conjucate the English verb "to
+tile", we get "tileigi" or "let us tile"] generates vector tiles from a
+PostgreSQL/PostGIS database. It's goals are to be as fast as possible, and as
+easy to install as possible.
 
-The input format is the `.tm2source` YAML file format. 
+The input format is the `.tm2source` YAML file format,
+link:docs/data-yml.adoc[documented here].
 
 == Installation
 
@@ -15,8 +19,8 @@ Install rust & download/clone this repository, and then build it.
 
 The binary will be in `./target/release/tileigi`. The binary file should be
 self contained and have no extra dependencies. During this early development
-phase, debug symbols are on, so the file can be large. Reduce it's size with
-`strip ./target/release/tileigi`
+phase, debug symbols are on for release mode builds, so the file can be large.
+Reduce it's size with `strip ./target/release/tileigi`
 
 == Example usage
 
@@ -26,35 +30,44 @@ Sample command:
 
 == Options
 
-    tileigi 0.2.0
-    Generate vector tiles from a yml file
-    
-    USAGE:
-        tileigi [FLAGS] [OPTIONS] --data-yml <data_yml>
-    
-    FLAGS:
-        -h, --help             Prints help information
-            --if-not-exists    Do not generate a tile if the file already exists. Doesn't work with mbtiles (yet)
-            --no-compress      Do not compress the pbf files
-        -V, --version          Prints version information
-    
-    OPTIONS:
-            --bbox <bbox>                        Only generate tiles inside this bbox. 'planet' for planet, or
-                                                 minlon,minlat,maxlon,maxlat
-            --bbox-bottom <bbox-bottom>          BBox, bottom
-            --bbox-left <bbox-left>              BBox, left
-            --bbox-right <bbox-right>            BBox, right
-            --bbox-top <bbox-top>                BBox, top
-            --data-yml <data_yml>                Filename of the .yml file
-            --dest-dir <dest_dir>                Save tiles to this mbtiles file
-            --dest-mbtiles <dest_mbtiles>        Save tiles to this TileStash directory path
-            --dest-modtile <dest_modtile>        Save tiles to this mod_tile directory path
-            --maxzoom <maxzoom>                  Maximum zoom to generate [default: 14]
-            --metatile-scale <metatile-scale>    Size of metatile to use (8x8 default) [default: 8]
-            --minzoom <minzoom>                  Minimum zoom to generate [default: 0]
-            --threads <threads>                  Number of concurrent generation threads to run [default: 1]
+----
+tileigi 0.8.0
+Generate vector tiles from a yml file
 
+USAGE:
+    tileigi [FLAGS] [OPTIONS] --data-yml <FILENAME> <--dest-dir <DIR>|--dest-mbtiles <FILENAME>|--dest-modtile <DIR>>
+
+FLAGS:
+    -h, --help             Prints help information
+        --if-not-exists    Do not generate a tile if the file already exists. Doesn't work with mbtiles (yet)
+        --no-compress      Do not compress the pbf files
+    -V, --version          Prints version information
+
+OPTIONS:
+        --bbox <MINLON,MINLAT,MAXLON,MAXLAT>    Only generate tiles inside this bbox. 'planet' for planet, or
+                                                minlon,minlat,maxlon,maxlat
+        --bbox-bottom <DEGREES>                 BBox, bottom
+        --bbox-left <DEGREES>                   BBox, left
+        --bbox-right <DEGREES>                  BBox, right
+        --bbox-top <DEGREES>                    BBox, top
+        --data-yml <FILENAME>                   Filename of the .yml file
+        --dest-dir <DIR>                        Save tiles to this mbtiles file
+        --dest-mbtiles <FILENAME>               Save tiles to this TileStash directory path
+        --dest-modtile <DIR>                    Save tiles to this mod_tile directory path
+        --mode <iter_mode>                       [default: tile-then-layer]  [possible values: tile-then-layer, layer
+                                                -then-tile]
+        --maxzoom <ZOOM>                        Maximum zoom to generate [default: 14]
+        --metatile-scale <NUMBER>               Size of metatile to use (8x8 default) [default: 8]
+        --minzoom <ZOOM>                        Minimum zoom to generate [default: 0]
+        --threads <NUBMER>                      Number of concurrent generation threads to run [default: 1]
+        --tile-list <FILENAME>                  Generate tiles from a list of tiles, one metatile per line 'SCALE Z/X/Y'
+        --zoom <ZOOM>                           Only generate for this zoom
+----
 
 It is still in early days, and barely beta qualtiy.
 
-Copyright under the GNU Affero GPL v3 (or later) (see the file link:LICENCE[LICENCE])
+== Copyright
+
+Copyright link:https://www.gnu.org/licenses/agpl-3.0.en.html[GNU Affero GPL v3
+(or later)]. See the file link:LICENCE[]
+
