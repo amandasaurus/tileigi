@@ -524,6 +524,7 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
 
     let mut new_rings: Vec<LineString<_>> = Vec::with_capacity(rings.len());
     for mut ring in rings.into_iter() {
+        trace!("make_rings_valid: Starting ring w/ {} points", ring.0.len());
         let mut rings_to_process = vec![ring];
 
         // Sometimes when adding points for crossing, we can make a linestring which has a self
@@ -543,9 +544,12 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
                 if ring.0.len() != old_num_points {
                     // we have added points, so we need to go through the loop again, to ensure
                     // that all the rings have points for crossing.
+                    trace!("make_rings_valid: Points have been added, so going again.");
                     added_points = true;
+                } else {
+                    trace!("make_rings_valid: No points added, will break out next");
                 }
-                trace!("Ring has {} points after adding", ring.0.len());
+                trace!("make_rings_valid: Ring has {} points after adding", ring.0.len());
             }
 
             let new_rings_to_process = rings_to_process.drain(..).flat_map(|ring| dissolve_into_rings(ring).into_iter()).collect::<Vec<LineString<i32>>>();
