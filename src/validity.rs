@@ -533,10 +533,8 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
         // add_points_for_all_crossings so that we don't have to run it repeatidly
         // FIXME check if we need to run dissolve_into_rings a lot, or can we just run the inner
         // for loop?
-        let mut added_points = false;
         loop {
-            if !added_points { break; }
-            added_points = false;
+            let mut added_points = false;
 
             for mut ring in rings_to_process.iter_mut() {
                 let old_num_points = ring.0.len();
@@ -553,6 +551,8 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
             let new_rings_to_process = rings_to_process.drain(..).flat_map(|ring| dissolve_into_rings(ring).into_iter()).collect::<Vec<LineString<i32>>>();
             ::std::mem::replace(&mut rings_to_process, new_rings_to_process);
             trace!("This ring has been dissolved into {} ring(s)", rings_to_process.len());
+
+            if !added_points { break; }
         }
 
         new_rings.extend(rings_to_process.into_iter());
