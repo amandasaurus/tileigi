@@ -216,7 +216,7 @@ impl TileDestination for ModTileMetatileDirectory {
         // Are there unnecessary memory copies?
         let x = metatile.x();
         let y = metatile.y();
-        let mut tiles_array: Vec<Vec<u8>> = vec![vec![]; 64];
+        let mut tiles_array: Vec<Vec<u8>> = vec![vec![]; size*size];
         for (tile, bytes) in tiles.into_iter() {
             let i = ((tile.x()-x)*size as u32 + (tile.y()-y)) as usize;
             tiles_array[i] = bytes;
