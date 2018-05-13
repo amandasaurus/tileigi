@@ -1,6 +1,7 @@
 use geo::*;
 use geo::map_coords::MapCoords;
 use geo::intersects::Intersects;
+use geo::prelude::BoundingBox;
 use geo::winding_order::Winding;
 use std::cmp::{min, max, Ord, Ordering};
 use std::ops::{Add, Sub, DivAssign,Rem,Mul,AddAssign};
@@ -1161,6 +1162,10 @@ fn is_ccw(ls: &LineString<i32>) -> bool {
     twice_linestring_area(ls) > 0
 }
 
+fn bbox_area<T: CoordinateType>(bbox: &Bbox<T>) -> T {
+    (bbox.xmax - bbox.xmin)*(bbox.ymax - bbox.ymin)
+}
+
 fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mut Vec<Polygon<T>>, mut interiors: Vec<LineString<T>>) {
     debug_assert!(polygons.iter().all(|p| p.interiors.len() == 0), "Invalid argument: polygons should have no interiors already");
     debug_assert!((polygons.is_empty() && interiors.is_empty()) || !polygons.is_empty(), "Invalid argument: Can't specify interiors without also polygons");
@@ -1183,11 +1188,22 @@ fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mu
     let mut interiors_f: Vec<LineString<f64>> = interiors.iter().map(|l| l.map_coords(&|&(x, y)| (x.into(), y.into()))).collect();
     
     for (interior_f, interior) in interiors_f.into_iter().zip(interiors.into_iter()) {
-        for (polygon_f, polygon) in polygons_f.iter_mut().zip(polygons.iter_mut()) {
+        let mut exteriors_intersections: Vec<_> = polygons_f.iter_mut().zip(polygons.iter_mut()).filter_map(|(polygon_f, polygon)| {
             if polygon_f.intersects(&interior_f) {
-                polygon.interiors.push(interior);
-                break;
+                Some(polygon)
+            } else {
+                None
             }
+        }).collect();
+        if exteriors_intersections.is_empty() {
+            continue;
+        } else {
+            
+            // Take the polygon with the largest bbox.
+            exteriors_intersections.sort_by_key(|p| bbox_area(&p.bbox().unwrap()));
+            let polygon = exteriors_intersections.pop().unwrap();
+
+            polygon.interiors.push(interior);
         }
     }
 
