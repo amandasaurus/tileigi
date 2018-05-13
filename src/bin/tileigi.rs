@@ -76,6 +76,8 @@ fn main() {
         .arg(Arg::with_name("if_not_exists").long("if-not-exists").help("Do not generate a tile if the file already exists. Doesn't work with mbtiles (yet)"))
         .arg(Arg::with_name("no_compress").long("no-compress").help("Do not compress the pbf files"))
 
+        .arg(Arg::with_name("file-writer-buffer").long("file-writer-buffer").help("Size of buffer for the file writer thread").takes_value(true))
+
         .arg(Arg::with_name("tile_list")
              .long("tile-list").alias("list")
              .takes_value(true).required(false).value_name("FILENAME")
@@ -126,12 +128,14 @@ fn main() {
 
     let tile_list: Option<String> = matches.value_of("tile_list").map(|s| s.to_string());
 
+    let file_writer_buffer: usize = matches.value_of("file-writer-buffer").map(|s| s.parse().unwrap()).unwrap_or(1_000_000);
+
     match matches.value_of("iter_mode") {
         Some("tile-then-layer") => {
-            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list);
+            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list, file_writer_buffer);
         },
         Some("layer-then-tile") => {
-            generate_by_layer(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list);
+            generate_by_layer(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list, file_writer_buffer);
         },
         _ => panic!(),
     }

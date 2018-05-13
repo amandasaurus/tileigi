@@ -292,7 +292,7 @@ fn scale_denominator_for_zoom(zoom: u8) -> f32 {
     }
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>, file_writer_buffer: usize) {
     let layers = Layers::from_file(filename);
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
@@ -340,7 +340,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     let new_bbox: Option<BBox> = bbox.clone();
     let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx, total_num_of_metatiles) });
 
-    let (fileio_tx, fileio_rx) = sync_channel(1_000_000);
+    let (fileio_tx, fileio_rx) = sync_channel(file_writer_buffer);
 
     let mut fileio_thread = match dest {
         &TileDestinationType::TileStashDirectory(ref path) => {
@@ -443,7 +443,7 @@ fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: 
 
 }
 
-pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>) {
+pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>, file_writer_buffer: usize) {
     if tile_list.is_some() {
         unimplemented!();
     }
@@ -451,7 +451,7 @@ pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Opti
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
 
-    let (fileio_tx, fileio_rx) = sync_channel(1_000_000);
+    let (fileio_tx, fileio_rx) = sync_channel(file_writer_buffer);
 
 
     let mut fileio_thread = match dest {
