@@ -540,12 +540,15 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
 
             for mut ring in rings_to_process.iter_mut() {
                 let old_num_points = ring.0.len();
+
+                trace!("make_rings_valid: Ring has {} points at the start of add_points_for_all_crossings", ring.0.len());
+
                 add_points_for_all_crossings(&mut ring);
                 debug_assert!(ring.0.len() >= old_num_points);
                 if ring.0.len() != old_num_points {
                     // we have added points, so we need to go through the loop again, to ensure
                     // that all the rings have points for crossing.
-                    trace!("make_rings_valid: Points have been added, so going again.");
+                    trace!("make_rings_valid: {} points have been added, so going again.", (ring.0.len() - old_num_points));
                     added_points = true;
                 } else {
                     trace!("make_rings_valid: No points added, will break out next");
@@ -932,6 +935,7 @@ enum RingType { Exterior, Interior }
 
 /// ring is at index `ring_type` in `all_rings`
 fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index: usize, all_rings: &Vec<LineString<T>>) -> RingType {
+    trace!("is_ring_ext_int: all_rings.len() {:?} ring_index {:?}", all_rings.len(), ring_index);
     // Do an even/odd check on a point in `ring` on all rings in all_rings. except this one (that's
     // why we need ring_index. If the point is inside, then this is an interior ring, else
     // exterior.
@@ -993,8 +997,10 @@ fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index
     }
 
     if num_crossings % 2 == 0 {
+        trace!("Ring {} has {} crossings, it's exterior", ring_index, num_crossings);
         RingType::Exterior
     } else {
+        trace!("Ring {} has {} crossings, it's interior", ring_index, num_crossings);
         RingType::Interior
     }
 
@@ -1016,7 +1022,7 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord+Into<f64>>(mut rings: V
     if rings.len() == 1 {
         return Some(MultiPolygon(vec![Polygon::new(rings.remove(0), vec![])]));
     }
-    trace!("convert_rings_to_polygons starting with {} rigns", rings.len());
+    trace!("convert_rings_to_polygons: starting with {} rigns", rings.len());
 
     let rings_with_type = calc_rings_ext_int(rings);
 
@@ -1056,7 +1062,7 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord+Into<f64>>(mut rings: V
             // nothing to do
         } else {
             // we need to figure out which exterior each interior is in.
-            //warn!("Unimplemented code. {} exteriors, and {} interiors. Dropping all interiors", polygons.len(), interiors.len());
+
             distribute_interiors(&mut polygons, interiors);
         }
     }
