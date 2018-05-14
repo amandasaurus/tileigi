@@ -1,6 +1,7 @@
 use geo::*;
 use geo::map_coords::MapCoords;
 use geo::intersects::Intersects;
+use geo::contains::Contains;
 use geo::prelude::BoundingBox;
 use geo::winding_order::Winding;
 use std::cmp::{min, max, Ord, Ordering};
@@ -1195,7 +1196,7 @@ fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mu
     
     for (interior_f, interior) in interiors_f.into_iter().zip(interiors.into_iter()) {
         let mut exteriors_intersections: Vec<_> = polygons_f.iter_mut().zip(polygons.iter_mut()).filter_map(|(polygon_f, polygon)| {
-            if polygon_f.intersects(&interior_f) {
+            if polygon_f.contains(&interior_f) {
                 Some(polygon)
             } else {
                 None
@@ -1212,7 +1213,6 @@ fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mu
             polygon.interiors.push(interior);
         }
     }
-
 
 }
 
