@@ -44,8 +44,7 @@ FLAGS:
     -V, --version          Prints version information
 
 OPTIONS:
-        --bbox <MINLON,MINLAT,MAXLON,MAXLAT>    Only generate tiles inside this bbox. 'planet' for planet, or
-                                                minlon,minlat,maxlon,maxlat
+        --bbox <MINLON,MINLAT,MAXLON,MAXLAT>    Only generate tiles inside this bbox. 'planet' for planet, or minlon,minlat,maxlon,maxlat
         --bbox-bottom <DEGREES>                 BBox, bottom
         --bbox-left <DEGREES>                   BBox, left
         --bbox-right <DEGREES>                  BBox, right
