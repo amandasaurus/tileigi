@@ -1186,6 +1186,12 @@ fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mu
         return;
     }
 
+    // polygons with the largest bboxes to the front, so that the largest polygon (ie first) that
+    // an interiour intersects
+    // TODO if/when geo's Bbox::area() supports T (instead of T: Float) change this.
+    polygons.sort_by_key(|p| bbox_area(&p.bbox().unwrap()));
+    polygons.reverse();
+
     // TODO implement this check
     //debug_assert!(polygons.iter().all(|p| interiors.iter().all(|i| !intersects(i, p.exterior))));
 
@@ -1195,22 +1201,11 @@ fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mu
     let mut interiors_f: Vec<LineString<f64>> = interiors.iter().map(|l| l.map_coords(&|&(x, y)| (x.into(), y.into()))).collect();
     
     for (interior_f, interior) in interiors_f.into_iter().zip(interiors.into_iter()) {
-        let mut exteriors_intersections: Vec<_> = polygons_f.iter_mut().zip(polygons.iter_mut()).filter_map(|(polygon_f, polygon)| {
+        for (polygon_f, polygon) in polygons_f.iter_mut().zip(polygons.iter_mut()) {
             if polygon_f.contains(&interior_f) {
-                Some(polygon)
-            } else {
-                None
+                polygon.interiors.push(interior);
+                break;
             }
-        }).collect();
-        if exteriors_intersections.is_empty() {
-            continue;
-        } else {
-            
-            // Take the polygon with the largest bbox.
-            exteriors_intersections.sort_by_key(|p| bbox_area(&p.bbox().unwrap()));
-            let polygon = exteriors_intersections.pop().unwrap();
-
-            polygon.interiors.push(interior);
         }
     }
 
