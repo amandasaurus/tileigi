@@ -61,6 +61,9 @@ mod simplify;
 
 use fileio::{FileIOMessage,TileDestination};
 
+mod stringstore;
+use stringstore::StringStore;
+
 #[cfg(test)]
 mod test;
 
@@ -559,8 +562,8 @@ fn worker_one_layer(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: Sync
         let metatile = metatile.unwrap();
         let scale = metatile.size() as u32;
 
-
-        let tiles = single_layer(&layer, global_maxzoom, &metatile, &connection_pool);
+        let mut string_store = StringStore::new();
+        let tiles = single_layer(&layer, global_maxzoom, &metatile, &connection_pool, &mut string_store);
 
         let num_tiles = tiles.len();
 
@@ -667,6 +670,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 
     let mut results: Vec<mapbox_vector_tile::Tile> = vec![empty_tile; (scale*scale) as usize];
 
+    let mut string_store = stringstore::StringStore::new();
+
     for layer in layers.layers.iter() {
         let minzoom = layer.minzoom;
         let maxzoom = layer.maxzoom;
@@ -676,7 +681,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             continue;
         }
 
-        let mvt_layers = single_layer(layer, layers.global_maxzoom, metatile, connection_pool);
+        let mvt_layers = single_layer(layer, layers.global_maxzoom, metatile, connection_pool, &mut string_store);
         for (mvt_tile, mvt_layer) in results.iter_mut().zip(mvt_layers.into_iter()) {
             mvt_tile.add_layer(mvt_layer);
         }
@@ -692,7 +697,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
     }).collect()
 }
 
-fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool) -> Vec<mapbox_vector_tile::Layer> {
+fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool, mut string_store: &mut StringStore) -> Vec<mapbox_vector_tile::Layer> {
     let scale = metatile.size() as u32;
     let layer_name = &layer.id;
 
@@ -849,8 +854,10 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
             let value: Option<mapbox_vector_tile::Value> = match column.type_().name() {
                 "float4" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Float)).unwrap_or(None),
                 "float8" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Double)).unwrap_or(None),
-                "text" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::String)).unwrap_or(None),
-                "varchar" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::String)).unwrap_or(None),
+
+                "text" =>  row.get_opt(name).map(|x| x.ok().map(|s: String| mapbox_vector_tile::Value::String(string_store.get_string(s)))).unwrap_or(None),
+                "varchar" =>  row.get_opt(name).map(|x| x.ok().map(|s: String| mapbox_vector_tile::Value::String(string_store.get_string(s)))).unwrap_or(None),
+
                 "int4" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i32 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
                 "int8" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i64 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
                 
@@ -867,7 +874,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
 
 
             if let Some(v) = value {
-                properties.insert(name, v);
+                properties.insert(string_store.get_string(name.to_string()), v);
             }
         }
         properties.0.shrink_to_fit();
