@@ -626,9 +626,12 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(St
     //println!("\n\nlayer.table {:?}\nparam {:?}\n", layer.table, layer.table.params(&bbox, &0., &0., &0.));
     let res = conn.query(&layer.table.query, &layer.table.params(&bbox, &0., &0., &0.)).unwrap();
 
-    res.columns().iter().filter(|c| c.name() != "way")
+    res.columns().iter()
         .filter_map(|column| {
-            let name = column.name().to_owned();
+            let name = column.name();
+            if name == "way" {
+                return None;
+            }
 
             // Sometimes a NULL value can be returned, hence the dance with Option<Value>
             let column_type: Option<String> = match column.type_().name() {
@@ -651,7 +654,7 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(St
             };
 
             if let Some(column_type) = column_type {
-                Some((name, column_type))
+                Some((name.to_owned(), column_type))
             } else {
                 None
             }
