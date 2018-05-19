@@ -769,6 +769,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
             },
             Ok(g) => g,
         };
+        drop(wkb_bytes);
 
         // TODO not sure about this
         let pixel_size: f64 = tile_width/extent;
