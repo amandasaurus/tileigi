@@ -300,7 +300,7 @@ pub fn remove_spikes_linestring(ls: LineString<i32>) -> Option<LineString<i32>> 
     loop {
         have_removed_points = false;
         // Technically points will get smaller all the time, and this slice is the same size, so it
-        // will be too big. But that doesn't matter
+        // will be too big. But that doesn't matter, it's faster to do this.
         for keep in points_to_keep.iter_mut() {
             *keep = true;
         }
