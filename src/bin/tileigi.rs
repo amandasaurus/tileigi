@@ -128,7 +128,7 @@ fn main() {
 
     let tile_list: Option<String> = matches.value_of("tile_list").map(|s| s.to_string());
 
-    let file_writer_buffer: usize = matches.value_of("file-writer-buffer").map(|s| s.parse().unwrap()).unwrap_or(1_000_000);
+    let file_writer_buffer: usize = matches.value_of("file-writer-buffer").map(|s| s.parse().unwrap()).unwrap_or(5_000);
 
     match matches.value_of("iter_mode") {
         Some("tile-then-layer") => {
