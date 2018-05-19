@@ -869,6 +869,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
                 properties.insert(name, v);
             }
         }
+        properties.0.shrink_to_fit();
 
         let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
             |(t, g)| match g {

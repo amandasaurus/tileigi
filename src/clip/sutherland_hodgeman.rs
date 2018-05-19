@@ -65,6 +65,8 @@ fn clip_ring_to_border(ring: Cow<LineString<i32>>, border: &Border<i32>) -> Opti
         //println!("all points {:?}", new_points);
     }
 
+    new_points.shrink_to_fit();
+
     if new_points.len() == 0 {
         None
     } else {

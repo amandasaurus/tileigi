@@ -305,8 +305,10 @@ fn clip_linestring_to_border(ls: Cow<LineString<i32>>, border: &Border<i32>) -> 
             }
 
             if curr_line.len() > 1 {
+                curr_line.shrink_to_fit();
                 lines.push(LineString(curr_line));
             }
+            lines.shrink_to_fit();
 
             match lines.len() {
                 // When there would only be one point returned.
