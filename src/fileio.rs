@@ -214,6 +214,7 @@ impl TileDestination for ModTileMetatileDirectory {
         let size = metatile.size() as usize;
         // TODO suspect I can optimize this...
         // Are there unnecessary memory copies?
+        assert!(size <= 8);
         let x = metatile.x();
         let y = metatile.y();
         let mut tiles_array: Vec<Vec<u8>> = vec![vec![]; size*size];
