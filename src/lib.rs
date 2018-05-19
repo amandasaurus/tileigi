@@ -431,13 +431,11 @@ fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: 
         let tiles = single_metatile(&layers, &metatile, &connection_pool);
         let num_tiles = tiles.len();
 
-
         let tiles: Vec<_> = tiles.into_iter().map(|(tile, mvt)| (tile, mvt.to_compressed_bytes())).collect();
-        let num_tiles = tiles.len();
-
-        fileio_tx.send(FileIOMessage::SaveMetaTile(metatile.clone(), tiles)).unwrap();
 
         printer_tx.send(printer::PrinterMessage::DoneTiles(metatile.zoom(), 1, num_tiles)).unwrap();
+
+        fileio_tx.send(FileIOMessage::SaveMetaTile(metatile, tiles)).unwrap();
 
     }
 
