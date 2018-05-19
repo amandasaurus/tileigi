@@ -623,7 +623,6 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(St
     let conn = connection_pool.connection_for_layer(&layer_name);
     
     let bbox = LocalBBox(0., 0., 0., 0.);
-    //println!("\n\nlayer.table {:?}\nparam {:?}\n", layer.table, layer.table.params(&bbox, &0., &0., &0.));
     let res = conn.query(&layer.table.query, &layer.table.params(&bbox, &0., &0., &0.)).unwrap();
 
     res.columns().iter()
