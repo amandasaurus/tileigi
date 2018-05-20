@@ -83,6 +83,8 @@ fn main() {
              .takes_value(true).required(false).value_name("FILENAME")
              .validator(|s| { if Path::new(&s).exists() { Ok(()) } else { Err(format!("File {} not found", s)) }})
              .help("Generate tiles from a list of tiles, one metatile per line 'SCALE Z/X/Y'"))
+
+        .arg(Arg::with_name("quiet").long("quiet").short("q").help("Quiet - don't print any progress output"))
         .get_matches();
 
     let data_yml = matches.value_of("data_yml").unwrap();
@@ -132,7 +134,7 @@ fn main() {
 
     match matches.value_of("iter_mode") {
         Some("tile-then-layer") => {
-            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list, file_writer_buffer);
+            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list, file_writer_buffer, matches.is_present("quiet"));
         },
         Some("layer-then-tile") => {
             generate_by_layer(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list, file_writer_buffer);

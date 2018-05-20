@@ -295,7 +295,7 @@ fn scale_denominator_for_zoom(zoom: u8) -> f32 {
     }
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>, file_writer_buffer: usize) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>, file_writer_buffer: usize, quiet: bool) {
     let layers = Layers::from_file(filename);
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
@@ -341,7 +341,11 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
     let (printer_tx, printer_rx) = channel();
     let new_bbox: Option<BBox> = bbox.clone();
-    let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx, total_num_of_metatiles) });
+    let mut printer_thread = if quiet {
+        thread::spawn(move || { printer::quiet_printer(printer_rx, total_num_of_metatiles) })
+    } else {
+        thread::spawn(move || { printer::printer(printer_rx, total_num_of_metatiles) })
+    };
 
     let (fileio_tx, fileio_rx) = sync_channel(file_writer_buffer);
 
@@ -408,11 +412,15 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     printer_thread.join().unwrap();
     fileio_tx.send(FileIOMessage::Quit).unwrap();
 
-    println!("All tiles generated. Waiting for all to be written to disk...");
+    if ! quiet {
+        println!("All tiles generated. Waiting for all to be written to disk...");
+    }
 
     fileio_thread.join().unwrap();
 
-    println!("Finished.");
+    if ! quiet {
+        println!("Finished.");
+    }
 
 }
 
