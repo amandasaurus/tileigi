@@ -1,5 +1,6 @@
 == Unreleased
 
+ * Refactoring to reduce memory usage, and speed up run time.
  * `--quiet` to not print any messages while generating
 
 == v0.8.0 (2018-05-10)
