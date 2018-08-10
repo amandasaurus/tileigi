@@ -132,4 +132,3 @@ pub fn quiet_printer(rx: Receiver<PrinterMessage>, _: Option<usize>) {
         }
     }
 }
-

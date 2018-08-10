@@ -20,7 +20,7 @@ byteorder = "1.2.1"
 separator = "0.3.1"
 log = "0.4.1"
 env_logger = "0.5.6"
-
+procinfo = "0.4.2"
 
 [profile.release]
 debug=true

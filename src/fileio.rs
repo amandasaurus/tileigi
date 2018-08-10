@@ -35,6 +35,7 @@ pub fn fileio_thread<D: TileDestination+Sized>(rx: Receiver<FileIOMessage>, mut 
             },
             FileIOMessage::SaveMetaTile(metatile, tiles) => {
                 dest.save_metatile(metatile, tiles);
+                memory!("Wrote a metatile");
             },
             FileIOMessage::AppendToTile(tile, bytes) => {
                 dest.append_bytes_to_tile(tile, bytes);

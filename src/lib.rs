@@ -20,6 +20,7 @@ extern crate rusqlite;
 extern crate md5;
 extern crate byteorder;
 extern crate separator;
+extern crate procinfo;
 
 use std::fs::File;
 use std::fs;
@@ -56,6 +57,24 @@ use clip::{clip_to_bbox,clip_geometry_to_tiles};
 
 mod validity;
 use validity::{is_valid, is_valid_skip_expensive};
+
+macro_rules! memory {
+    () => (
+        use separator::Separatable;
+        let total_memory = procinfo::pid::status_self().ok().map(|s| s.vm_rss.separated_string()).unwrap_or("N/A".to_string());
+        info!("total memory {} KiB", total_memory);
+    );
+    ($msg: expr) => (
+        use separator::Separatable;
+        let total_memory = procinfo::pid::status_self().ok().map(|s| s.vm_rss.separated_string()).unwrap_or("N/A".to_string());
+        info!("total memory {} KiB: {}", total_memory, $msg);
+    );
+    ($msg: expr, $($arg:tt)*) => (
+        use separator::Separatable;
+        let total_memory = procinfo::pid::status_self().ok().map(|s| s.vm_rss.separated_string()).unwrap_or("N/A".to_string());
+        info!("total memory {} KiB: {}", total_memory, format!($msg, $($arg)*));
+    );
+}
 
 mod printer;
 mod fileio;
@@ -420,6 +439,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
     fileio_thread.join().unwrap();
 
+    memory!("Finished");
     if ! quiet {
         println!("Finished.");
     }
@@ -695,10 +715,12 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
         for (mvt_tile, mvt_layer) in results.iter_mut().zip(mvt_layers.into_iter()) {
             mvt_tile.add_layer(mvt_layer);
         }
+        //memory!("Done layer {}", layer.id);
 
     }
 
 
+    memory!("Metatile {:?} finished", metatile);
     results.into_iter().enumerate().map(|(i, mvt_tile)| {
         let i = i as u32;
         let x = i / scale + metatile.x();
@@ -769,6 +791,9 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
     for (i, row) in res {
         num_objects += 1;
         let bad_obj = false && metatile.zoom() == 3 && i == 4_579;
+        if i % 5_000 == 0 {
+            //memory!("layer {} have done {} objects", layer_name, i.separated_string());
+        }
 
         // First object is the ST_AsBinary
         // TODO Does this do any copies that we don't want?
@@ -933,6 +958,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
         };
 
     }
+    memory!("Finished layer {}, there were {} object", layer_name, num_objects.separated_string());
 
     results
 
