@@ -1,4 +1,5 @@
 #![allow(dead_code,unused_imports,unused_variables,unused_mut,unused_assignments)]
+#![feature(extern_prelude)]
 
 #[macro_use(to_sql_checked)]
 extern crate postgres;
@@ -48,6 +49,7 @@ use geo::algorithm::map_coords::MapCoords;
 use geo::algorithm::map_coords::MapCoordsInplace;
 use geo::algorithm::boundingbox::BoundingBox;
 use geo::algorithm::contains::Contains;
+use separator::Separatable;
 
 mod clip;
 use clip::{clip_to_bbox,clip_geometry_to_tiles};

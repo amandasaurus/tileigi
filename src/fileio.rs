@@ -212,12 +212,34 @@ impl TileDestination for ModTileMetatileDirectory {
 
     fn save_metatile(&mut self, metatile: slippy_map_tiles::Metatile, tiles: Vec<(slippy_map_tiles::Tile, Vec<u8>)>) {
         let size = metatile.size() as usize;
+        let x = metatile.x();
+        let y = metatile.y();
+        let zoom = metatile.zoom();
+
+        if size > 8 {
+            // Split this metatile into smaller 8x8 metatiles.
+            // We still require a whole number multiple of 8
+            assert_eq!(size % 8, 0);
+            let multiple = (size / 8) as usize;
+            let mut new_metatiles = vec![Vec::new(); multiple*multiple];
+            for (tile, bytes) in tiles.into_iter() {
+                let new_mt_x = ((tile.x() - x) / 8) as usize;
+                let new_mt_y = ((tile.y() - y) / 8) as usize;
+                new_metatiles[new_mt_x*multiple+new_mt_y].push((tile, bytes));
+            }
+
+            for (offset, tiles) in new_metatiles.into_iter().enumerate() {
+                let offset = offset as u32;
+                self.save_metatile(slippy_map_tiles::Metatile::new(8, zoom, x+(offset/8), y+(offset%8)).unwrap(), tiles);
+            }
+
+            return;
+        }
+
         // TODO suspect I can optimize this...
         // Are there unnecessary memory copies?
         assert!(size <= 8);
-        let x = metatile.x();
-        let y = metatile.y();
-        let mut tiles_array: Vec<Vec<u8>> = vec![vec![]; size*size];
+        let mut tiles_array: Vec<Vec<u8>> = vec![Vec::new(); size*size];
         for (tile, bytes) in tiles.into_iter() {
             let i = ((tile.x()-x)*size as u32 + (tile.y()-y)) as usize;
             tiles_array[i] = bytes;
