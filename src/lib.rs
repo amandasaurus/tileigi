@@ -20,6 +20,8 @@ extern crate md5;
 extern crate byteorder;
 extern crate separator;
 
+extern crate failure;
+
 use std::fs::File;
 use std::fs;
 use std::io::prelude::*;
@@ -64,6 +66,8 @@ use fileio::{FileIOMessage,TileDestination};
 #[cfg(test)]
 mod test;
 
+type Result<T> = std::result::Result<T, failure::Error>;
+
 #[derive(Clone)]
 pub enum TileDestinationType {
     TileStashDirectory(PathBuf),
@@ -78,7 +82,7 @@ pub struct ConnectionPool {
 }
 
 impl ConnectionPool {
-    pub fn new(params_to_layers: HashMap<ConnectParams, Vec<String>>) -> Self {
+    pub fn new(params_to_layers: HashMap<ConnectParams, Vec<String>>) -> Result<Self> {
         let mut layer_to_param = HashMap::new();
         for (cp, ls) in params_to_layers.iter() {
             for l in ls.iter() {
@@ -88,11 +92,11 @@ impl ConnectionPool {
 
         let mut connections = HashMap::with_capacity(params_to_layers.len());
         for (cp, layers) in params_to_layers.into_iter() {
-            let connection = Connection::connect(cp.clone(), TlsMode::None).unwrap();
+            let connection = Connection::connect(cp.clone(), TlsMode::None)?;
             connections.insert(cp, connection);
         }
 
-        ConnectionPool{ connections: connections, layer_to_param: layer_to_param }
+        Ok(ConnectionPool{ connections: connections, layer_to_param: layer_to_param })
     }
 
     fn connection_for_layer<'a>(&'a self, layer_id: &str) -> &'a Connection {
@@ -292,10 +296,10 @@ fn scale_denominator_for_zoom(zoom: u8) -> f32 {
     }
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>) -> Result<()> {
     let layers = Layers::from_file(filename);
 
-    let connection_pool = ConnectionPool::new(layers.get_all_connections());
+    let connection_pool = ConnectionPool::new(layers.get_all_connections())?;
 
     let (metatile_iterator, total_num_of_metatiles) = match tile_list {
         None => {
@@ -365,7 +369,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     let mut workers = Vec::with_capacity(num_threads);
     for _ in 0..num_threads {
         // TODO do I need all these clones?
-        let my_connection_pool = ConnectionPool::new(layers.get_all_connections());
+        let my_connection_pool = ConnectionPool::new(layers.get_all_connections())?;
         let my_printer_tx = printer_tx.clone();
         let my_fileio_tx = fileio_tx.clone();
         let my_metatile_iterator = Arc::clone(&metatile_iterator);
@@ -411,6 +415,8 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
     println!("Finished.");
 
+    Ok(())
+
 }
 
 fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<Iterator<Item=Metatile>>>, connection_pool: &ConnectionPool, layers: &Layers, should_do_metatile: F)
@@ -443,13 +449,13 @@ fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: 
 
 }
 
-pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>) {
+pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>) -> Result<()> {
     if tile_list.is_some() {
         unimplemented!();
     }
     let layers = Layers::from_file(filename);
 
-    let connection_pool = ConnectionPool::new(layers.get_all_connections());
+    let connection_pool = ConnectionPool::new(layers.get_all_connections())?;
 
     let (fileio_tx, fileio_rx) = sync_channel(1_000_000);
 
@@ -515,7 +521,7 @@ pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Opti
         let mut workers = Vec::with_capacity(num_threads);
         for _ in 0..num_threads {
             // TODO do I need all these clones?
-            let my_connection_pool = ConnectionPool::new(layers.get_all_connections());
+            let my_connection_pool = ConnectionPool::new(layers.get_all_connections())?;
             let my_printer_tx = printer_tx.clone();
             let my_fileio_tx = fileio_tx.clone();
             let my_metatile_iterator = Arc::clone(&metatile_iterator);
@@ -548,6 +554,7 @@ pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Opti
 
     println!("Finished.");
 
+    Ok(())
 }
 
 fn worker_one_layer(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, connection_pool: &ConnectionPool, layer: &Layer, global_maxzoom: u8)
@@ -1163,7 +1170,7 @@ impl<T: num_traits::Float+Into<f64>+std::fmt::Debug> ToSql for LocalBBox<T> {
         ty.name() == "geometry"
     }
 
-    fn to_sql(&self, ty: &Type, mut out: &mut Vec<u8>) -> Result<IsNull, Box<::std::error::Error+Sync+Send>> {
+    fn to_sql(&self, ty: &Type, mut out: &mut Vec<u8>) -> std::result::Result<IsNull, Box<::std::error::Error+Sync+Send>> {
         let minx = self.0.into();
         let miny = self.1.into();
         let maxx = self.2.into();

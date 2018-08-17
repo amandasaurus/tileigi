@@ -4,6 +4,7 @@ extern crate clap;
 
 extern crate log;
 extern crate env_logger;
+extern crate failure;
 
 extern crate tileigi;
 
@@ -17,7 +18,7 @@ use log::Level;
 
 use tileigi::*;
 
-fn main() {
+fn main() -> Result<(), failure::Error> {
     env_logger::Builder::from_default_env()
         .format(|buf, record| {
             let level = record.level();
@@ -128,11 +129,12 @@ fn main() {
 
     match matches.value_of("iter_mode") {
         Some("tile-then-layer") => {
-            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list);
+            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list)?;
         },
         Some("layer-then-tile") => {
-            generate_by_layer(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list);
+            generate_by_layer(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list)?;
         },
         _ => panic!(),
     }
+    Ok(())
 }

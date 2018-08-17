@@ -1,3 +1,8 @@
+## Unreleased
+
+ * Internal refactor for proper error handling
+
+
 <a name="v0.8.0"></a>
 ## v0.8.0 (2018-05-10)
 
