@@ -732,6 +732,7 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
 fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool, mut string_store: &mut StringStore) -> Vec<mapbox_vector_tile::Layer> {
     let scale = metatile.size() as u32;
     let layer_name = &layer.id;
+    debug!("Starting layer {} metatile {:?}", layer_name, metatile);
 
     let new_layer = mapbox_vector_tile::Layer::new(layer_name.to_string());
     let mut results: Vec<mapbox_vector_tile::Layer> = vec![mapbox_vector_tile::Layer::new(layer_name.to_string()); (scale*scale) as usize];
@@ -843,7 +844,6 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
         // Only do the simplification if we're not at maxzoom. We've already removed extra
         //
         // points in remove_unneeded_points above
-        //println!("{} L {}", file!(), line!());
         let geom = if metatile.zoom() < global_maxzoom {
                 match simplify::simplify(geom, 8) {
                     None => {
@@ -852,7 +852,6 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
                     Some(g) => g,
                 }
         } else { geom };
-        //println!("{} L {}", file!(), line!());
         //debug_assert!(is_valid(&geom), "L {} Geometry is invalid after remap: {:100}", line!(), format!("{:?}", geom));
         //if bad_obj { println!("{}:{} geom {:102}", file!(), line!(), format!("{:?}", geom)); }
         //if bad_obj {
@@ -921,6 +920,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
                 Some(mut g) => {
                     //debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
 
+                    trace!("About to call make_valid");
                     match validity::make_valid(g) {
                         None => None,
                         Some(mut g) => {
@@ -958,6 +958,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
         };
 
     }
+    debug!("Finished layer {}, there were {} object", layer_name, num_objects.separated_string());
     memory!("Finished layer {}, there were {} object", layer_name, num_objects.separated_string());
 
     results
