@@ -320,7 +320,7 @@ fn scale_denominator_for_zoom(zoom: u8) -> f32 {
     }
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>, file_writer_buffer: usize, quiet: bool) {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>, file_writer_buffer: usize, quiet: bool) -> Result<()> {
     let layers = Layers::from_file(filename);
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
@@ -377,16 +377,16 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     let mut fileio_thread = match dest {
         &TileDestinationType::TileStashDirectory(ref path) => {
             let tile_dest = fileio::TileStashDirectory::new(&path);
-            write_tilejson(&layers, &connection_pool, &path);
+            write_tilejson(&layers, &connection_pool, &path)?;
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
         },
         &TileDestinationType::MBTiles(ref path) => {
             let mut tile_dest = fileio::MBTiles::new(&path);
-            tile_dest.set_tilejson_vector_layers(tilejson_vector_layers(&layers, &connection_pool));
+            tile_dest.set_tilejson_vector_layers(tilejson_vector_layers(&layers, &connection_pool)?);
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
         },
         &TileDestinationType::ModTileDirectory(ref path) => {
-            write_tilejson(&layers, &connection_pool, &path);
+            write_tilejson(&layers, &connection_pool, &path)?;
             let tile_dest = fileio::ModTileMetatileDirectory::new(&path);
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
         },
@@ -448,6 +448,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
         println!("Finished.");
     }
 
+    Ok(())
 }
 
 fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<Iterator<Item=Metatile>>>, connection_pool: &ConnectionPool, layers: &Layers, should_do_metatile: F)
@@ -497,7 +498,7 @@ pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Opti
         },
         &TileDestinationType::MBTiles(ref path) => {
             let mut tile_dest = fileio::MBTiles::new(&path);
-            tile_dest.set_tilejson_vector_layers(tilejson_vector_layers(&layers, &connection_pool));
+            tile_dest.set_tilejson_vector_layers(tilejson_vector_layers(&layers, &connection_pool).unwrap());
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
         },
         &TileDestinationType::ModTileDirectory(ref path) => {
@@ -616,27 +617,27 @@ fn worker_one_layer(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: Sync
 
 }
 
-fn tilejson_vector_layers(layers: &Layers, connection_pool: &ConnectionPool) -> serde_json::Value {
-    json!({
+fn tilejson_vector_layers(layers: &Layers, connection_pool: &ConnectionPool) -> Result<serde_json::Value> {
+    Ok(json!({
         "vector_layers": layers.layers.iter().map(|layer| {
             let layer_name = &layer.id;
-            let columns = columns_for_layer(layer, connection_pool);
+            let columns: Vec<(String, String)> = columns_for_layer(layer, connection_pool)?;
             let minzoom = layer.minzoom;
             let maxzoom = layer.maxzoom;
             let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
-            json!({
+            Ok(json!({
                 "id": layer_name,
                 "description": "",
                 "minzoom": minzoom,
                 "maxzoom": maxzoom,
                 "fields": columns.into_iter().collect::<HashMap<_, _>>(),
-            })
-        }).collect::<Vec<_>>(),
-    })
+            }))
+        }).collect::<Result<Vec<_>>>()?,
+    }))
 }
 
 
-fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &PathBuf) {
+fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &PathBuf) -> Result<()> {
     let tilejson = json!({
         "tilejson": "2.2.0",
         "tiles": [
@@ -645,24 +646,26 @@ fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &Path
         "minzoom": 0,
         "maxzoom": 14,
         "format": "pbf",
-        "vector_layers": tilejson_vector_layers(layers, connection_pool),
+        "vector_layers": tilejson_vector_layers(layers, connection_pool)?,
     });
 
-    fs::create_dir_all(&dest).unwrap();
-    let mut tilejson_file = File::create(dest.join("index.json")).unwrap();
-    serde_json::to_writer_pretty(tilejson_file, &tilejson).unwrap();
+    fs::create_dir_all(&dest)?;
+    let mut tilejson_file = File::create(dest.join("index.json"))?;
+    serde_json::to_writer_pretty(tilejson_file, &tilejson)?;
+
+    Ok(())
     
 }
 
-fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(String, String)> {
+fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Result<Vec<(String, String)>> {
     let layer_name = &layer.id;
 
     let conn = connection_pool.connection_for_layer(&layer_name);
     
     let bbox = LocalBBox(0., 0., 0., 0.);
-    let res = conn.query(&layer.table.query, &layer.table.params(&bbox, &0., &0., &0.)).unwrap();
+    let res = conn.query(&layer.table.query, &layer.table.params(&bbox, &0., &0., &0.))?;
 
-    res.columns().iter()
+    let cols = res.columns().iter()
         .filter_map(|column| {
             let name = column.name();
             if name == "way" {
@@ -695,7 +698,9 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(St
                 None
             }
         })
-        .collect()
+        .collect();
+    
+    Ok(cols)
 }
 
 pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool) -> Vec<(slippy_map_tiles::Tile, mapbox_vector_tile::Tile)> {
