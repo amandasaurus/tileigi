@@ -35,8 +35,8 @@ fn main() {
 
             let ts = buf.timestamp();
             write!(buf, "{}: ", ts).unwrap();
-            write!(buf, "{}: ", record.module_path().unwrap_or("UNKNOWN_MOD")).unwrap();
-            write!(buf, "{}:{} ", record.file().unwrap_or("UNKNOWN_FILE"), record.line().map(|l| format!("{}", l)).unwrap_or("UNKNOWN_LINE".to_string())).unwrap();
+            write!(buf, "{}", record.module_path().unwrap_or("UNKNOWN_MOD")).unwrap();
+            write!(buf, ":L{} ", record.line().map(|l| format!("{}", l)).unwrap_or("UNKNOWN_LINE".to_string())).unwrap();
 
             writeln!(buf, "{}", record.args()).unwrap();
 
