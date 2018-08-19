@@ -4,6 +4,7 @@ extern crate clap;
 
 extern crate log;
 extern crate env_logger;
+extern crate failure;
 
 extern crate tileigi;
 
@@ -17,7 +18,7 @@ use log::Level;
 
 use tileigi::*;
 
-fn main() {
+fn main() -> Result<(), failure::Error> {
     env_logger::Builder::from_default_env()
         .format(|buf, record| {
             let level = record.level();
@@ -70,8 +71,6 @@ fn main() {
 
         .arg(Arg::with_name("metatile-scale").long("metatile-scale").default_value("8").value_name("NUMBER").help("Size of metatile to use (8x8 default)"))
         .arg(Arg::with_name("threads").long("threads").default_value("1").value_name("NUBMER").help("Number of concurrent generation threads to run"))
-
-        .arg(Arg::with_name("iter_mode").long("mode").default_value("tile-then-layer").possible_values(&["tile-then-layer", "layer-then-tile"]))
 
         .arg(Arg::with_name("if_not_exists").long("if-not-exists").help("Do not generate a tile if the file already exists. Doesn't work with mbtiles (yet)"))
         .arg(Arg::with_name("no_compress").long("no-compress").help("Do not compress the pbf files"))
@@ -132,13 +131,7 @@ fn main() {
 
     let file_writer_buffer: usize = matches.value_of("file-writer-buffer").map(|s| s.parse().unwrap()).unwrap_or(5_000);
 
-    match matches.value_of("iter_mode") {
-        Some("tile-then-layer") => {
-            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list, file_writer_buffer, matches.is_present("quiet"));
-        },
-        Some("layer-then-tile") => {
-            generate_by_layer(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list, file_writer_buffer);
-        },
-        _ => panic!(),
-    }
+    generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list, file_writer_buffer, matches.is_present("quiet"))?;
+
+    Ok(())
 }
