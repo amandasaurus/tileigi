@@ -193,6 +193,10 @@ pub struct Layers {
     layers: Vec<Layer>,
     global_maxzoom: u8,
     global_minzoom: u8,
+    bounds: [f64; 4],
+    center: [f64; 3],
+    name: String,
+    description: String,
 }
 
 #[derive(Clone,Debug)]
@@ -216,6 +220,24 @@ impl Layers {
 
         let global_maxzoom = data_yml["maxzoom"].as_i64().unwrap() as u8;
         let global_minzoom = data_yml["minzoom"].as_i64().unwrap() as u8;
+        let bounds = data_yml["bounds"].as_vec().unwrap();
+        // '90' would be parsed as an int in yaml
+        let bounds: [f64; 4] = [
+            bounds[0].as_f64().or_else(|| bounds[0].as_i64().map(|i| i as f64)).unwrap(),
+            bounds[1].as_f64().or_else(|| bounds[1].as_i64().map(|i| i as f64)).unwrap(),
+            bounds[2].as_f64().or_else(|| bounds[2].as_i64().map(|i| i as f64)).unwrap(),
+            bounds[3].as_f64().or_else(|| bounds[3].as_i64().map(|i| i as f64)).unwrap(),
+        ];
+
+        let center = data_yml["center"].as_vec().unwrap();
+        let center: [f64; 3] = [
+            center[0].as_f64().or_else(|| center[0].as_i64().map(|i| i as f64)).unwrap(),
+            center[1].as_f64().or_else(|| center[1].as_i64().map(|i| i as f64)).unwrap(),
+            center[2].as_f64().or_else(|| center[2].as_i64().map(|i| i as f64)).unwrap(),
+        ];
+
+        let name = data_yml["name"].as_str().unwrap().to_string();
+        let description = data_yml["description"].as_str().unwrap().to_string();
 
         // rust-yaml really needs an into_hash (etc)
         // clone all the things
@@ -249,7 +271,7 @@ impl Layers {
             })
             .collect();
 
-        Layers{ layers: layers, global_minzoom: global_minzoom, global_maxzoom: global_maxzoom }
+        Layers{ layers: layers, global_minzoom: global_minzoom, global_maxzoom: global_maxzoom, bounds: bounds, center: center, name: name, description: description }
 
     }
 
@@ -536,6 +558,10 @@ fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &Path
         "tiles": [
             "http://www.example.com/{z}/{x}/{y}.pbf"
         ],
+        "bounds": layers.bounds,
+        "center": layers.center,
+        "name": layers.name,
+        "description": layers.description,
         "minzoom": 0,
         "maxzoom": 14,
         "format": "pbf",

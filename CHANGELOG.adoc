@@ -4,7 +4,8 @@
  * Refactoring to reduce memory usage, and speed up run time.
  * tileigi command got `--quiet` argument to not print any messages while
    generating
- * TileJSON now stored in `metadata.json` rather than `index.json`
+ * TileJSON now stored in `metadata.json` rather than `index.json`, and
+   additional fields added from the input source
 
 == v0.8.0 (2018-05-10)
 
