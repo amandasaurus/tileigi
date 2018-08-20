@@ -18,7 +18,7 @@ use log::Level;
 
 use tileigi::*;
 
-fn main() {
+fn main() -> Result<(), failure::Error> {
     env_logger::Builder::from_default_env()
         .format(|buf, record| {
             let level = record.level();

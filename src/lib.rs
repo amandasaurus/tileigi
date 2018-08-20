@@ -1113,7 +1113,7 @@ impl<T: num_traits::Float+Into<f64>+std::fmt::Debug> ToSql for LocalBBox<T> {
         ty.name() == "geometry"
     }
 
-    fn to_sql(&self, ty: &Type, mut out: &mut Vec<u8>) -> Result<IsNull, Box<::std::error::Error+Sync+Send>> {
+    fn to_sql(&self, ty: &Type, mut out: &mut Vec<u8>) -> std::result::Result<IsNull, Box<::std::error::Error+Sync+Send>> {
         let minx = self.0.into();
         let miny = self.1.into();
         let maxx = self.2.into();

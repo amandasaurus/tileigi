@@ -4,7 +4,7 @@ version = "0.8.0"
 authors = ["Rory McCann <rory@technomancy.org>"]
 
 [dependencies]
-mapbox_vector_tile = "0.1.0"
+mapbox_vector_tile = { git = "https://github.com/rory/rust-mapbox-vector-tile", tag = "v0.3.0" }
 yaml-rust = "0.3"
 slippy-map-tiles = "0.14"
 postgres = "0.15.2"
