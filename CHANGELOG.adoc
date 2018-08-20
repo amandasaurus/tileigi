@@ -2,7 +2,8 @@
 
  * Internal refactor for proper error handling
  * Refactoring to reduce memory usage, and speed up run time.
- * `--quiet` to not print any messages while generating
+ * tileigi command got `--quiet` argument to not print any messages while
+   generating
  * TileJSON now stored in `metadata.json` rather than `index.json`
 
 == v0.8.0 (2018-05-10)
