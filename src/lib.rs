@@ -511,8 +511,8 @@ fn worker_one_layer(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: Sync
 }
 
 fn tilejson_vector_layers(layers: &Layers, connection_pool: &ConnectionPool) -> Result<serde_json::Value> {
-    Ok(json!({
-        "vector_layers": layers.layers.iter().map(|layer| {
+    Ok(json!(
+            layers.layers.iter().map(|layer| {
             let layer_name = &layer.id;
             let columns: Vec<(String, String)> = columns_for_layer(layer, connection_pool)?;
             let minzoom = layer.minzoom;
@@ -525,8 +525,8 @@ fn tilejson_vector_layers(layers: &Layers, connection_pool: &ConnectionPool) -> 
                 "maxzoom": maxzoom,
                 "fields": columns.into_iter().collect::<HashMap<_, _>>(),
             }))
-        }).collect::<Result<Vec<_>>>()?,
-    }))
+        }).collect::<Result<Vec<_>>>()?
+    ))
 }
 
 
