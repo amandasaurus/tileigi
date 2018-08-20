@@ -543,7 +543,7 @@ fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &Path
     });
 
     fs::create_dir_all(&dest)?;
-    let mut tilejson_file = File::create(dest.join("index.json"))?;
+    let mut tilejson_file = File::create(dest.join("metadata.json"))?;
     serde_json::to_writer_pretty(tilejson_file, &tilejson)?;
 
     Ok(())
