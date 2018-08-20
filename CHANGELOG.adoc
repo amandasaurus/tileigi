@@ -1,30 +1,26 @@
-## Unreleased
+== Unreleased
 
  * Internal refactor for proper error handling
+ * Refactoring to reduce memory usage, and speed up run time.
+ * `--quiet` to not print any messages while generating
 
+== v0.8.0 (2018-05-10)
 
-<a name="v0.8.0"></a>
-## v0.8.0 (2018-05-10)
-
-
-#### Bug Fixes
+=== Bug Fixes
 
 *   Fix interior rings of polygons with a quick hack, which probably slows things down. ([4547a007](4547a007))
+
 * **validity:**
   *  Fix my loop, was breaking too early ([5a3bab3e](5a3bab3e))
   *  hack to ensure we don't get self intersecting lines ([967f040c](967f040c))
 
+== v0.7.0 (2018-04-15)
 
-
-<a name="v0.7.0"></a>
-## v0.7.0 (2018-04-15)
-
-
-#### Bug Fixes
+=== Bug Fixes
 
 *   Make less invalid polygons and correctly dissolve into rings ([83476e95](83476e95))
 
-#### Features
+=== Features
 
 *   make_valid: work on linestrings ([45da9a65](45da9a65))
 *   use better log level ([5b57a5c3](5b57a5c3))
@@ -35,33 +31,31 @@
 
 
 
-<a name="v0.6.0"></a>
-## v0.6.0 (2018-02-28)
+== v0.6.0 (2018-02-28)
 
 
-#### Features
+=== Features
 
 *   Can read tiles from a file and only generate them ([317e484e](317e484e))
 *   Formatting improvements ([e3c5b098](e3c5b098))
 *   UI improvements for printing numbers. ([56156917](56156917))
 
-#### Bug Fixes
+=== Bug Fixes
 
 *   Properly handle zoom levels 0ish with metatiles ([a360d228](a360d228))
 *   Work around int overflow by not trying to be as clever ([f9725c72](f9725c72))
 
 
 
-<a name="v0.5.0"></a>
-## v0.5.0 (2018-02-18)
+== v0.5.0 (2018-02-18)
 
 
-#### Performance
+=== Performance
 
 *   Even less clones ([250f3bb0](250f3bb0))
 *   Remove unnesseary .clone() ([b56f476c](b56f476c))
 
-#### Features
+=== Features
 
 *   Better output printing for times. hms ([489b84c5](489b84c5))
 *   Print ETA and percentage while generation. It's slightly wrong. ([ddd2e218](ddd2e218))
@@ -69,18 +63,17 @@
 
 
 
-<a name="v0.3.0"></a>
-## v0.3.0 (2018-02-18)
+== v0.3.0 (2018-02-18)
 
 
-#### Features
+=== Features
 
 *   Option to choose the per-layer or per-tile mode ([4738d064](4738d064))
 *   Can do tiles layer then tile, rather then tile then layer ([92d96bba](92d96bba))
 *   Add --zoom option. Less typing than --minzoom & --maxzoom ([47bb3b52](47bb3b52))
 * **mbtiles:**  Can append tiles to mbtiles files ([28b0e6eb](28b0e6eb))
 
-#### Bug Fixes
+=== Bug Fixes
 
 *   Correct bug with early return ([d9f790a1](d9f790a1))
 *   Integer overflow in validity/windingness check ([0aff491b](0aff491b))

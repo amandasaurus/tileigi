@@ -18,7 +18,7 @@ use log::Level;
 
 use tileigi::*;
 
-fn main() -> Result<(), failure::Error> {
+fn main() {
     env_logger::Builder::from_default_env()
         .format(|buf, record| {
             let level = record.level();
@@ -36,8 +36,8 @@ fn main() -> Result<(), failure::Error> {
 
             let ts = buf.timestamp();
             write!(buf, "{}: ", ts).unwrap();
-            write!(buf, "{}: ", record.module_path().unwrap_or("UNKNOWN_MOD")).unwrap();
-            write!(buf, "{}:{} ", record.file().unwrap_or("UNKNOWN_FILE"), record.line().map(|l| format!("{}", l)).unwrap_or("UNKNOWN_LINE".to_string())).unwrap();
+            write!(buf, "{}", record.module_path().unwrap_or("UNKNOWN_MOD")).unwrap();
+            write!(buf, ":L{} ", record.line().map(|l| format!("{}", l)).unwrap_or("UNKNOWN_LINE".to_string())).unwrap();
 
             writeln!(buf, "{}", record.args()).unwrap();
 
@@ -72,10 +72,10 @@ fn main() -> Result<(), failure::Error> {
         .arg(Arg::with_name("metatile-scale").long("metatile-scale").default_value("8").value_name("NUMBER").help("Size of metatile to use (8x8 default)"))
         .arg(Arg::with_name("threads").long("threads").default_value("1").value_name("NUBMER").help("Number of concurrent generation threads to run"))
 
-        .arg(Arg::with_name("iter_mode").long("mode").default_value("tile-then-layer").possible_values(&["tile-then-layer", "layer-then-tile"]))
-
         .arg(Arg::with_name("if_not_exists").long("if-not-exists").help("Do not generate a tile if the file already exists. Doesn't work with mbtiles (yet)"))
         .arg(Arg::with_name("no_compress").long("no-compress").help("Do not compress the pbf files"))
+
+        .arg(Arg::with_name("file-writer-buffer").long("file-writer-buffer").help("Size of buffer for the file writer thread").takes_value(true))
 
         .arg(Arg::with_name("tile_list")
              .long("tile-list").alias("list")
@@ -127,14 +127,9 @@ fn main() -> Result<(), failure::Error> {
 
     let tile_list: Option<String> = matches.value_of("tile_list").map(|s| s.to_string());
 
-    match matches.value_of("iter_mode") {
-        Some("tile-then-layer") => {
-            generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list)?;
-        },
-        Some("layer-then-tile") => {
-            generate_by_layer(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list)?;
-        },
-        _ => panic!(),
-    }
+    let file_writer_buffer: usize = matches.value_of("file-writer-buffer").map(|s| s.parse().unwrap()).unwrap_or(5_000);
+
+    generate_all(&data_yml, minzoom, maxzoom, &bbox, &dest, if_not_exists, compress, metatile_scale, num_threads, tile_list, file_writer_buffer, matches.is_present("quiet"))?;
+
     Ok(())
 }

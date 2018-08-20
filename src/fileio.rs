@@ -35,6 +35,7 @@ pub fn fileio_thread<D: TileDestination+Sized>(rx: Receiver<FileIOMessage>, mut 
             },
             FileIOMessage::SaveMetaTile(metatile, tiles) => {
                 dest.save_metatile(metatile, tiles);
+                memory!("Wrote a metatile");
             },
             FileIOMessage::AppendToTile(tile, bytes) => {
                 dest.append_bytes_to_tile(tile, bytes);
@@ -212,11 +213,34 @@ impl TileDestination for ModTileMetatileDirectory {
 
     fn save_metatile(&mut self, metatile: slippy_map_tiles::Metatile, tiles: Vec<(slippy_map_tiles::Tile, Vec<u8>)>) {
         let size = metatile.size() as usize;
-        // TODO suspect I can optimize this...
-        // Are there unnecessary memory copies?
         let x = metatile.x();
         let y = metatile.y();
-        let mut tiles_array: Vec<Vec<u8>> = vec![vec![]; 64];
+        let zoom = metatile.zoom();
+
+        if size > 8 {
+            // Split this metatile into smaller 8x8 metatiles.
+            // We still require a whole number multiple of 8
+            assert_eq!(size % 8, 0);
+            let multiple = (size / 8) as usize;
+            let mut new_metatiles = vec![Vec::new(); multiple*multiple];
+            for (tile, bytes) in tiles.into_iter() {
+                let new_mt_x = ((tile.x() - x) / 8) as usize;
+                let new_mt_y = ((tile.y() - y) / 8) as usize;
+                new_metatiles[new_mt_x*multiple+new_mt_y].push((tile, bytes));
+            }
+
+            for (offset, tiles) in new_metatiles.into_iter().enumerate() {
+                let offset = offset as u32;
+                self.save_metatile(slippy_map_tiles::Metatile::new(8, zoom, x+(offset/8), y+(offset%8)).unwrap(), tiles);
+            }
+
+            return;
+        }
+
+        // TODO suspect I can optimize this...
+        // Are there unnecessary memory copies?
+        assert!(size <= 8);
+        let mut tiles_array: Vec<Vec<u8>> = vec![Vec::new(); size*size];
         for (tile, bytes) in tiles.into_iter() {
             let i = ((tile.x()-x)*size as u32 + (tile.y()-y)) as usize;
             tiles_array[i] = bytes;

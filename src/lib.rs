@@ -1,4 +1,5 @@
 #![allow(dead_code,unused_imports,unused_variables,unused_mut,unused_assignments)]
+#![feature(extern_prelude)]
 
 #[macro_use(to_sql_checked)]
 extern crate postgres;
@@ -19,6 +20,7 @@ extern crate rusqlite;
 extern crate md5;
 extern crate byteorder;
 extern crate separator;
+extern crate procinfo;
 
 extern crate failure;
 
@@ -50,6 +52,7 @@ use geo::algorithm::map_coords::MapCoords;
 use geo::algorithm::map_coords::MapCoordsInplace;
 use geo::algorithm::boundingbox::BoundingBox;
 use geo::algorithm::contains::Contains;
+use separator::Separatable;
 
 mod clip;
 use clip::{clip_to_bbox,clip_geometry_to_tiles};
@@ -57,11 +60,32 @@ use clip::{clip_to_bbox,clip_geometry_to_tiles};
 mod validity;
 use validity::{is_valid, is_valid_skip_expensive};
 
+macro_rules! memory {
+    () => (
+        use separator::Separatable;
+        let total_memory = procinfo::pid::status_self().ok().map(|s| s.vm_rss.separated_string()).unwrap_or("N/A".to_string());
+        info!("total memory {} KiB", total_memory);
+    );
+    ($msg: expr) => (
+        use separator::Separatable;
+        let total_memory = procinfo::pid::status_self().ok().map(|s| s.vm_rss.separated_string()).unwrap_or("N/A".to_string());
+        info!("total memory {} KiB: {}", total_memory, $msg);
+    );
+    ($msg: expr, $($arg:tt)*) => (
+        use separator::Separatable;
+        let total_memory = procinfo::pid::status_self().ok().map(|s| s.vm_rss.separated_string()).unwrap_or("N/A".to_string());
+        info!("total memory {} KiB: {}", total_memory, format!($msg, $($arg)*));
+    );
+}
+
 mod printer;
 mod fileio;
 mod simplify;
 
 use fileio::{FileIOMessage,TileDestination};
+
+mod stringstore;
+use stringstore::StringStore;
 
 #[cfg(test)]
 mod test;
@@ -82,7 +106,7 @@ pub struct ConnectionPool {
 }
 
 impl ConnectionPool {
-    pub fn new(params_to_layers: HashMap<ConnectParams, Vec<String>>) -> Result<Self> {
+    pub fn new(params_to_layers: HashMap<ConnectParams, Vec<String>>) -> Self {
         let mut layer_to_param = HashMap::new();
         for (cp, ls) in params_to_layers.iter() {
             for l in ls.iter() {
@@ -92,11 +116,11 @@ impl ConnectionPool {
 
         let mut connections = HashMap::with_capacity(params_to_layers.len());
         for (cp, layers) in params_to_layers.into_iter() {
-            let connection = Connection::connect(cp.clone(), TlsMode::None)?;
+            let connection = Connection::connect(cp.clone(), TlsMode::None).unwrap();
             connections.insert(cp, connection);
         }
 
-        Ok(ConnectionPool{ connections: connections, layer_to_param: layer_to_param })
+        ConnectionPool{ connections: connections, layer_to_param: layer_to_param }
     }
 
     fn connection_for_layer<'a>(&'a self, layer_id: &str) -> &'a Connection {
@@ -296,10 +320,10 @@ fn scale_denominator_for_zoom(zoom: u8) -> f32 {
     }
 }
 
-pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>) -> Result<()> {
+pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>, file_writer_buffer: usize, quiet: bool) -> Result<()> {
     let layers = Layers::from_file(filename);
 
-    let connection_pool = ConnectionPool::new(layers.get_all_connections())?;
+    let connection_pool = ConnectionPool::new(layers.get_all_connections());
 
     let (metatile_iterator, total_num_of_metatiles) = match tile_list {
         None => {
@@ -342,23 +366,27 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
 
     let (printer_tx, printer_rx) = channel();
     let new_bbox: Option<BBox> = bbox.clone();
-    let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx, total_num_of_metatiles) });
+    let mut printer_thread = if quiet {
+        thread::spawn(move || { printer::quiet_printer(printer_rx, total_num_of_metatiles) })
+    } else {
+        thread::spawn(move || { printer::printer(printer_rx, total_num_of_metatiles) })
+    };
 
-    let (fileio_tx, fileio_rx) = sync_channel(1_000_000);
+    let (fileio_tx, fileio_rx) = sync_channel(file_writer_buffer);
 
     let mut fileio_thread = match dest {
         &TileDestinationType::TileStashDirectory(ref path) => {
             let tile_dest = fileio::TileStashDirectory::new(&path);
-            write_tilejson(&layers, &connection_pool, &path);
+            write_tilejson(&layers, &connection_pool, &path)?;
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
         },
         &TileDestinationType::MBTiles(ref path) => {
             let mut tile_dest = fileio::MBTiles::new(&path);
-            tile_dest.set_tilejson_vector_layers(tilejson_vector_layers(&layers, &connection_pool));
+            tile_dest.set_tilejson_vector_layers(tilejson_vector_layers(&layers, &connection_pool)?);
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
         },
         &TileDestinationType::ModTileDirectory(ref path) => {
-            write_tilejson(&layers, &connection_pool, &path);
+            write_tilejson(&layers, &connection_pool, &path)?;
             let tile_dest = fileio::ModTileMetatileDirectory::new(&path);
             thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
         },
@@ -369,7 +397,7 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     let mut workers = Vec::with_capacity(num_threads);
     for _ in 0..num_threads {
         // TODO do I need all these clones?
-        let my_connection_pool = ConnectionPool::new(layers.get_all_connections())?;
+        let my_connection_pool = ConnectionPool::new(layers.get_all_connections());
         let my_printer_tx = printer_tx.clone();
         let my_fileio_tx = fileio_tx.clone();
         let my_metatile_iterator = Arc::clone(&metatile_iterator);
@@ -409,14 +437,18 @@ pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BB
     printer_thread.join().unwrap();
     fileio_tx.send(FileIOMessage::Quit).unwrap();
 
-    println!("All tiles generated. Waiting for all to be written to disk...");
+    if ! quiet {
+        println!("All tiles generated. Waiting for all to be written to disk...");
+    }
 
     fileio_thread.join().unwrap();
 
-    println!("Finished.");
+    memory!("Finished");
+    if ! quiet {
+        println!("Finished.");
+    }
 
     Ok(())
-
 }
 
 fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<Iterator<Item=Metatile>>>, connection_pool: &ConnectionPool, layers: &Layers, should_do_metatile: F)
@@ -437,124 +469,14 @@ fn worker_all_layers<F>(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: 
         let tiles = single_metatile(&layers, &metatile, &connection_pool);
         let num_tiles = tiles.len();
 
-
         let tiles: Vec<_> = tiles.into_iter().map(|(tile, mvt)| (tile, mvt.to_compressed_bytes())).collect();
-        let num_tiles = tiles.len();
-
-        fileio_tx.send(FileIOMessage::SaveMetaTile(metatile.clone(), tiles)).unwrap();
 
         printer_tx.send(printer::PrinterMessage::DoneTiles(metatile.zoom(), 1, num_tiles)).unwrap();
 
+        fileio_tx.send(FileIOMessage::SaveMetaTile(metatile, tiles)).unwrap();
+
     }
 
-}
-
-pub fn generate_by_layer(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>) -> Result<()> {
-    if tile_list.is_some() {
-        unimplemented!();
-    }
-    let layers = Layers::from_file(filename);
-
-    let connection_pool = ConnectionPool::new(layers.get_all_connections())?;
-
-    let (fileio_tx, fileio_rx) = sync_channel(1_000_000);
-
-
-    let mut fileio_thread = match dest {
-        &TileDestinationType::TileStashDirectory(ref path) => {
-            let tile_dest = fileio::TileStashDirectory::new(&path);
-            write_tilejson(&layers, &connection_pool, &path);
-            thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
-        },
-        &TileDestinationType::MBTiles(ref path) => {
-            let mut tile_dest = fileio::MBTiles::new(&path);
-            tile_dest.set_tilejson_vector_layers(tilejson_vector_layers(&layers, &connection_pool));
-            thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
-        },
-        &TileDestinationType::ModTileDirectory(ref path) => {
-            write_tilejson(&layers, &connection_pool, &path);
-            let tile_dest = fileio::ModTileMetatileDirectory::new(&path);
-            thread::spawn(move || { fileio::fileio_thread(fileio_rx, Box::new(tile_dest)) })
-        },
-    };
-    let global_maxzoom = layers.global_maxzoom;
-
-    for layer in layers.layers.iter() {
-
-        if min_zoom > layer.maxzoom || max_zoom < layer.minzoom {
-            // This layer doesn't apply.
-            continue;
-        }
-        println!("\nLayer {}", layer.id);
-
-
-        let total_num_of_metatiles: Option<usize> = (min_zoom..max_zoom+1).map(|z| {
-            match *bbox {
-                None => {
-                    let scale = (metatile_scale.trailing_zeros()) as u32;
-                    let z = z as u32;
-                    if scale >= z {
-                        Some(1)
-                    } else {
-                        Some(2_u64.pow(2u32 * (z-scale)) as usize)
-                    }
-                },
-                Some(ref bbox) => {
-                    let this = slippy_map_tiles::size_bbox_zoom_metatiles(&bbox, z, metatile_scale);
-                    this
-                },
-            }})
-            .fold(Some(0_usize), |acc, on_this_zoom| {
-                match (acc, on_this_zoom) {
-                    (Some(x), Some(y)) => x.checked_add(y),
-                    _ => None,
-                }
-            });
-
-        let (printer_tx, printer_rx) = channel();
-        let new_bbox: Option<BBox> = bbox.clone();
-        let mut printer_thread = thread::spawn(move || { printer::printer(printer_rx, total_num_of_metatiles) });
-
-        let mut metatile_iterator = MetatilesIterator::new_for_bbox_zoom(metatile_scale, &bbox, min_zoom, max_zoom);
-        let mut metatile_iterator = Arc::new(Mutex::new(metatile_iterator));
-
-        let mut workers = Vec::with_capacity(num_threads);
-        for _ in 0..num_threads {
-            // TODO do I need all these clones?
-            let my_connection_pool = ConnectionPool::new(layers.get_all_connections())?;
-            let my_printer_tx = printer_tx.clone();
-            let my_fileio_tx = fileio_tx.clone();
-            let my_metatile_iterator = Arc::clone(&metatile_iterator);
-            let my_layer = layer.clone();
-            let my_dest = dest.clone();
-
-            // TODO 'should do metatile'
-
-            let handle = thread::spawn(move || {
-                worker_one_layer(my_printer_tx, my_fileio_tx, my_metatile_iterator, &my_connection_pool, &my_layer, global_maxzoom);
-            });
-            workers.push(handle);
-        }
-
-        for worker in workers {
-            // If one of our worker threads has panic'ed, then this main programme should fail too
-            worker.join().ok();
-        }
-
-        printer_tx.send(printer::PrinterMessage::Quit).unwrap();
-        printer_thread.join().unwrap();
-    }
-
-
-    fileio_tx.send(FileIOMessage::Quit).unwrap();
-
-    println!("All tiles generated. Waiting for all to be written to disk...");
-
-    fileio_thread.join().unwrap();
-
-    println!("Finished.");
-
-    Ok(())
 }
 
 fn worker_one_layer(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: SyncSender<FileIOMessage>, mut metatile_iterator: Arc<Mutex<MetatilesIterator>>, connection_pool: &ConnectionPool, layer: &Layer, global_maxzoom: u8)
@@ -568,8 +490,8 @@ fn worker_one_layer(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: Sync
         let metatile = metatile.unwrap();
         let scale = metatile.size() as u32;
 
-
-        let tiles = single_layer(&layer, global_maxzoom, &metatile, &connection_pool);
+        let mut string_store = StringStore::new();
+        let tiles = single_layer(&layer, global_maxzoom, &metatile, &connection_pool, &mut string_store);
 
         let num_tiles = tiles.len();
 
@@ -588,27 +510,27 @@ fn worker_one_layer(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: Sync
 
 }
 
-fn tilejson_vector_layers(layers: &Layers, connection_pool: &ConnectionPool) -> serde_json::Value {
-    json!({
+fn tilejson_vector_layers(layers: &Layers, connection_pool: &ConnectionPool) -> Result<serde_json::Value> {
+    Ok(json!({
         "vector_layers": layers.layers.iter().map(|layer| {
             let layer_name = &layer.id;
-            let columns = columns_for_layer(layer, connection_pool);
+            let columns: Vec<(String, String)> = columns_for_layer(layer, connection_pool)?;
             let minzoom = layer.minzoom;
             let maxzoom = layer.maxzoom;
             let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
-            json!({
+            Ok(json!({
                 "id": layer_name,
                 "description": "",
                 "minzoom": minzoom,
                 "maxzoom": maxzoom,
                 "fields": columns.into_iter().collect::<HashMap<_, _>>(),
-            })
-        }).collect::<Vec<_>>(),
-    })
+            }))
+        }).collect::<Result<Vec<_>>>()?,
+    }))
 }
 
 
-fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &PathBuf) {
+fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &PathBuf) -> Result<()> {
     let tilejson = json!({
         "tilejson": "2.2.0",
         "tiles": [
@@ -617,27 +539,31 @@ fn write_tilejson(layers: &Layers, connection_pool: &ConnectionPool, dest: &Path
         "minzoom": 0,
         "maxzoom": 14,
         "format": "pbf",
-        "vector_layers": tilejson_vector_layers(layers, connection_pool),
+        "vector_layers": tilejson_vector_layers(layers, connection_pool)?,
     });
 
-    fs::create_dir_all(&dest).unwrap();
-    let mut tilejson_file = File::create(dest.join("index.json")).unwrap();
-    serde_json::to_writer_pretty(tilejson_file, &tilejson).unwrap();
+    fs::create_dir_all(&dest)?;
+    let mut tilejson_file = File::create(dest.join("index.json"))?;
+    serde_json::to_writer_pretty(tilejson_file, &tilejson)?;
+
+    Ok(())
     
 }
 
-fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(String, String)> {
+fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Result<Vec<(String, String)>> {
     let layer_name = &layer.id;
 
     let conn = connection_pool.connection_for_layer(&layer_name);
     
     let bbox = LocalBBox(0., 0., 0., 0.);
-    //println!("\n\nlayer.table {:?}\nparam {:?}\n", layer.table, layer.table.params(&bbox, &0., &0., &0.));
-    let res = conn.query(&layer.table.query, &layer.table.params(&bbox, &0., &0., &0.)).unwrap();
+    let res = conn.query(&layer.table.query, &layer.table.params(&bbox, &0., &0., &0.))?;
 
-    res.columns().iter().filter(|c| c.name() != "way")
+    let cols = res.columns().iter()
         .filter_map(|column| {
-            let name = column.name().to_owned();
+            let name = column.name();
+            if name == "way" {
+                return None;
+            }
 
             // Sometimes a NULL value can be returned, hence the dance with Option<Value>
             let column_type: Option<String> = match column.type_().name() {
@@ -660,12 +586,14 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Vec<(St
             };
 
             if let Some(column_type) = column_type {
-                Some((name, column_type))
+                Some((name.to_owned(), column_type))
             } else {
                 None
             }
         })
-        .collect()
+        .collect();
+    
+    Ok(cols)
 }
 
 pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool) -> Vec<(slippy_map_tiles::Tile, mapbox_vector_tile::Tile)> {
@@ -673,6 +601,8 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
     let scale = metatile.size() as u32;
 
     let mut results: Vec<mapbox_vector_tile::Tile> = vec![empty_tile; (scale*scale) as usize];
+
+    let mut string_store = stringstore::StringStore::new();
 
     for layer in layers.layers.iter() {
         let minzoom = layer.minzoom;
@@ -683,14 +613,16 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
             continue;
         }
 
-        let mvt_layers = single_layer(layer, layers.global_maxzoom, metatile, connection_pool);
+        let mvt_layers = single_layer(layer, layers.global_maxzoom, metatile, connection_pool, &mut string_store);
         for (mvt_tile, mvt_layer) in results.iter_mut().zip(mvt_layers.into_iter()) {
             mvt_tile.add_layer(mvt_layer);
         }
+        //memory!("Done layer {}", layer.id);
 
     }
 
 
+    memory!("Metatile {:?} finished", metatile);
     results.into_iter().enumerate().map(|(i, mvt_tile)| {
         let i = i as u32;
         let x = i / scale + metatile.x();
@@ -699,9 +631,10 @@ pub fn single_metatile(layers: &Layers, metatile: &slippy_map_tiles::Metatile, c
     }).collect()
 }
 
-fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool) -> Vec<mapbox_vector_tile::Layer> {
+fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::Metatile, connection_pool: &ConnectionPool, mut string_store: &mut StringStore) -> Vec<mapbox_vector_tile::Layer> {
     let scale = metatile.size() as u32;
     let layer_name = &layer.id;
+    debug!("Starting layer {} metatile {:?}", layer_name, metatile);
 
     let new_layer = mapbox_vector_tile::Layer::new(layer_name.to_string());
     let mut results: Vec<mapbox_vector_tile::Layer> = vec![mapbox_vector_tile::Layer::new(layer_name.to_string()); (scale*scale) as usize];
@@ -761,6 +694,9 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
     for (i, row) in res {
         num_objects += 1;
         let bad_obj = false && metatile.zoom() == 3 && i == 4_579;
+        if i % 5_000 == 0 {
+            //memory!("layer {} have done {} objects", layer_name, i.separated_string());
+        }
 
         // First object is the ST_AsBinary
         // TODO Does this do any copies that we don't want?
@@ -776,6 +712,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
             },
             Ok(g) => g,
         };
+        drop(wkb_bytes);
 
         // TODO not sure about this
         let pixel_size: f64 = tile_width/extent;
@@ -855,8 +792,10 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
             let value: Option<mapbox_vector_tile::Value> = match column.type_().name() {
                 "float4" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Float)).unwrap_or(None),
                 "float8" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Double)).unwrap_or(None),
-                "text" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::String)).unwrap_or(None),
-                "varchar" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::String)).unwrap_or(None),
+
+                "text" =>  row.get_opt(name).map(|x| x.ok().map(|s: String| mapbox_vector_tile::Value::String(string_store.get_string(s)))).unwrap_or(None),
+                "varchar" =>  row.get_opt(name).map(|x| x.ok().map(|s: String| mapbox_vector_tile::Value::String(string_store.get_string(s)))).unwrap_or(None),
+
                 "int4" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i32 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
                 "int8" => row.get_opt(name).map(|x| x.ok().map(|y| { let val: i64 = y; mapbox_vector_tile::Value::Int(val as i64) })).unwrap_or(None),
                 
@@ -873,9 +812,10 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
 
 
             if let Some(v) = value {
-                properties.insert(name, v);
+                properties.insert(string_store.get_string(name.to_string()), v);
             }
         }
+        properties.0.shrink_to_fit();
 
         let mut geoms: Vec<_> = clip_geometry_to_tiles(&metatile, geom, buffer).into_iter().filter_map(
             |(t, g)| match g {
@@ -884,6 +824,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
                 Some(mut g) => {
                     //debug_assert!(is_valid(&g), "L {} Geometry is invalid after clip_geometry_to_tiles: {:?}", line!(), g);
 
+                    trace!("About to call make_valid");
                     match validity::make_valid(g) {
                         None => None,
                         Some(mut g) => {
@@ -921,6 +862,8 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
         };
 
     }
+    debug!("Finished layer {}, there were {} object", layer_name, num_objects.separated_string());
+    memory!("Finished layer {}, there were {} object", layer_name, num_objects.separated_string());
 
     results
 
@@ -1170,7 +1113,7 @@ impl<T: num_traits::Float+Into<f64>+std::fmt::Debug> ToSql for LocalBBox<T> {
         ty.name() == "geometry"
     }
 
-    fn to_sql(&self, ty: &Type, mut out: &mut Vec<u8>) -> std::result::Result<IsNull, Box<::std::error::Error+Sync+Send>> {
+    fn to_sql(&self, ty: &Type, mut out: &mut Vec<u8>) -> Result<IsNull, Box<::std::error::Error+Sync+Send>> {
         let minx = self.0.into();
         let miny = self.1.into();
         let maxx = self.2.into();

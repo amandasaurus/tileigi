@@ -1,6 +1,8 @@
 use geo::*;
 use geo::map_coords::MapCoords;
 use geo::intersects::Intersects;
+use geo::contains::Contains;
+use geo::prelude::BoundingBox;
 use geo::winding_order::Winding;
 use std::cmp::{min, max, Ord, Ordering};
 use std::ops::{Add, Sub, DivAssign,Rem,Mul,AddAssign};
@@ -497,7 +499,7 @@ pub fn make_valid(mut geom: Geometry<i32>) -> Option<Geometry<i32>> {
 }
 
 fn make_multipolygon_valid(mut mp: MultiPolygon<i32>) -> Option<MultiPolygon<i32>> {
-    trace!("making multipolygon valid");
+    trace!("making multipolygon valid, mp has {} inner polys", mp.0.len());
     let MultiPolygon( polygons ) = mp;
 
     let rings: Vec<LineString<_>> = polygons.into_iter().flat_map(|p| {
@@ -512,6 +514,7 @@ fn make_multipolygon_valid(mut mp: MultiPolygon<i32>) -> Option<MultiPolygon<i32
 }
 
 fn make_polygon_valid(mut p: Polygon<i32>) -> Option<MultiPolygon<i32>> {
+    trace!("make_polygon_valid p has {} interiors", p.interiors.len());
     let Polygon{ exterior, interiors } = p;
     let mut rings = interiors;
     rings.insert(0, exterior);
@@ -520,11 +523,11 @@ fn make_polygon_valid(mut p: Polygon<i32>) -> Option<MultiPolygon<i32>> {
 }
 
 fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>> {
-    trace!("make_rings_valid: Starting with {} ring(s)", rings.len());
+    trace!("make_rings_valid: function start with {} ring(s)", rings.len());
 
     let mut new_rings: Vec<LineString<_>> = Vec::with_capacity(rings.len());
     for mut ring in rings.into_iter() {
-        trace!("make_rings_valid: Starting ring w/ {} points", ring.0.len());
+        trace!("make_rings_valid: Processing ring w/ {} points", ring.0.len());
         let mut rings_to_process = vec![ring];
 
         // Sometimes when adding points for crossing, we can make a linestring which has a self
@@ -539,12 +542,15 @@ fn make_rings_valid(mut rings: Vec<LineString<i32>>) -> Option<MultiPolygon<i32>
 
             for mut ring in rings_to_process.iter_mut() {
                 let old_num_points = ring.0.len();
+
+                trace!("make_rings_valid: Ring has {} points at the start of add_points_for_all_crossings", ring.0.len());
+
                 add_points_for_all_crossings(&mut ring);
                 debug_assert!(ring.0.len() >= old_num_points);
                 if ring.0.len() != old_num_points {
                     // we have added points, so we need to go through the loop again, to ensure
                     // that all the rings have points for crossing.
-                    trace!("make_rings_valid: Points have been added, so going again.");
+                    trace!("make_rings_valid: {} points have been added, so going again.", (ring.0.len() - old_num_points));
                     added_points = true;
                 } else {
                     trace!("make_rings_valid: No points added, will break out next");
@@ -931,6 +937,7 @@ enum RingType { Exterior, Interior }
 
 /// ring is at index `ring_type` in `all_rings`
 fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index: usize, all_rings: &Vec<LineString<T>>) -> RingType {
+    trace!("is_ring_ext_int: all_rings.len() {:?} ring_index {:?}", all_rings.len(), ring_index);
     // Do an even/odd check on a point in `ring` on all rings in all_rings. except this one (that's
     // why we need ring_index. If the point is inside, then this is an interior ring, else
     // exterior.
@@ -992,8 +999,10 @@ fn is_ring_ext_int<T: CoordinateType+Debug+Ord>(ring: &LineString<T>, ring_index
     }
 
     if num_crossings % 2 == 0 {
+        trace!("Ring {} has {} crossings, it's exterior", ring_index, num_crossings);
         RingType::Exterior
     } else {
+        trace!("Ring {} has {} crossings, it's interior", ring_index, num_crossings);
         RingType::Interior
     }
 
@@ -1015,10 +1024,9 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord+Into<f64>>(mut rings: V
     if rings.len() == 1 {
         return Some(MultiPolygon(vec![Polygon::new(rings.remove(0), vec![])]));
     }
-    trace!("convert_rings_to_polygons starting with {} rigns", rings.len());
+    trace!("convert_rings_to_polygons: starting with {} rings", rings.len());
 
     let rings_with_type = calc_rings_ext_int(rings);
-
 
     // Do a simple case when there are only 2 rings?
     let mut exteriors = Vec::new();
@@ -1055,7 +1063,9 @@ fn convert_rings_to_polygons<T: CoordinateType+Debug+Ord+Into<f64>>(mut rings: V
             // nothing to do
         } else {
             // we need to figure out which exterior each interior is in.
-            //warn!("Unimplemented code. {} exteriors, and {} interiors. Dropping all interiors", polygons.len(), interiors.len());
+            trace!("exteriors:\n{}", polygons.iter().map(|p| geom_as_geojson(&Geometry::Polygon(p.clone()), 4096.*8.)).collect::<Vec<String>>().join("\n"));
+            trace!("interiors:\n{}", interiors.iter().map(|l| geom_as_geojson(&Geometry::LineString(l.clone()), 4096.*8.)).collect::<Vec<String>>().join("\n"));
+
             distribute_interiors(&mut polygons, interiors);
         }
     }
@@ -1161,7 +1171,12 @@ fn is_ccw(ls: &LineString<i32>) -> bool {
     twice_linestring_area(ls) > 0
 }
 
+fn bbox_area<T: CoordinateType>(bbox: &Bbox<T>) -> T {
+    (bbox.xmax - bbox.xmin)*(bbox.ymax - bbox.ymin)
+}
+
 fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mut Vec<Polygon<T>>, mut interiors: Vec<LineString<T>>) {
+    debug!("[distribute_interiors] start. {} polygons {} interiors", polygons.len(), interiors.len());
     debug_assert!(polygons.iter().all(|p| p.interiors.len() == 0), "Invalid argument: polygons should have no interiors already");
     debug_assert!((polygons.is_empty() && interiors.is_empty()) || !polygons.is_empty(), "Invalid argument: Can't specify interiors without also polygons");
     if polygons.is_empty() || interiors.is_empty() {
@@ -1174,6 +1189,12 @@ fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mu
         return;
     }
 
+    // polygons with the largest bboxes to the front, so that the largest polygon (ie first) that
+    // an interiour intersects
+    // TODO if/when geo's Bbox::area() supports T (instead of T: Float) change this.
+    polygons.sort_by_key(|p| bbox_area(&p.bbox().unwrap()));
+    polygons.reverse();
+
     // TODO implement this check
     //debug_assert!(polygons.iter().all(|p| interiors.iter().all(|i| !intersects(i, p.exterior))));
 
@@ -1184,13 +1205,12 @@ fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mu
     
     for (interior_f, interior) in interiors_f.into_iter().zip(interiors.into_iter()) {
         for (polygon_f, polygon) in polygons_f.iter_mut().zip(polygons.iter_mut()) {
-            if polygon_f.intersects(&interior_f) {
+            if polygon_f.contains(&interior_f) {
                 polygon.interiors.push(interior);
                 break;
             }
         }
     }
-
 
 }
 

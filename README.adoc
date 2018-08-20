@@ -44,8 +44,7 @@ FLAGS:
     -V, --version          Prints version information
 
 OPTIONS:
-        --bbox <MINLON,MINLAT,MAXLON,MAXLAT>    Only generate tiles inside this bbox. 'planet' for planet, or
-                                                minlon,minlat,maxlon,maxlat
+        --bbox <MINLON,MINLAT,MAXLON,MAXLAT>    Only generate tiles inside this bbox. 'planet' for planet, or minlon,minlat,maxlon,maxlat
         --bbox-bottom <DEGREES>                 BBox, bottom
         --bbox-left <DEGREES>                   BBox, left
         --bbox-right <DEGREES>                  BBox, right
@@ -64,7 +63,17 @@ OPTIONS:
         --zoom <ZOOM>                           Only generate for this zoom
 ----
 
-It is still in early days, and barely beta qualtiy.
+It is still in early days, and beta qualtiy.
+
+== Future work & Bugs
+
+ * Always generate valid polygons (mostly done)
+ * Refactor file storage to allow access to MBTiles in threads to support `--if-not-exists`
+ * Memory leak, memory usage grows when generating a lot of tiles (queue size)
+ * Refactor to make it cleanier, less messy.
+ * Bolt a HTTP server to the front to dynamically serve tiles
+ * Faster, always making it faster
+ * Document the Metatile file format
 
 == Copyright
 
