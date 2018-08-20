@@ -249,7 +249,11 @@ impl TileDestination for ModTileMetatileDirectory {
 
         let mut offsets = vec![0; size*size];
         let mut sizes = vec![0; size*size];
-        let mut curr_offset = 0;
+
+        // offset is from the start of the file, so it starts with
+        // 'META' = 4 bytes. count = 4 bytes. 12 bytes for x, y, z
+        // 8 * count for offsets
+        let mut curr_offset = 4 + 4 + 12 + 8*(size*size);
         for i in 0..(size*size) {
             offsets[i] = curr_offset;
             let this_size = tiles[i].len();

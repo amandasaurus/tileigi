@@ -1,5 +1,6 @@
 == Unreleased
 
+ * Fix modtile/metatile output format: incorrect 'offsets' were being saved.
  * Internal refactor for proper error handling
  * Refactoring to reduce memory usage, and speed up run time.
  * tileigi command got `--quiet` argument to not print any messages while
