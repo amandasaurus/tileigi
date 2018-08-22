@@ -1204,11 +1204,16 @@ fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mu
     let mut interiors_f: Vec<LineString<f64>> = interiors.iter().map(|l| l.map_coords(&|&(x, y)| (x.into(), y.into()))).collect();
     
     for (interior_f, interior) in interiors_f.into_iter().zip(interiors.into_iter()) {
+        let mut been_assigned = false;
         for (polygon_f, polygon) in polygons_f.iter_mut().zip(polygons.iter_mut()) {
             if polygon_f.contains(&interior_f) {
                 polygon.interiors.push(interior);
+                been_assigned = true;
                 break;
             }
+        }
+        if !been_assigned {
+            warn!("Interior polygon idx {} can't be allocated to any exterior polygon", interior_idx);
         }
     }
 
