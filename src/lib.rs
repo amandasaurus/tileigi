@@ -21,6 +21,9 @@ extern crate md5;
 extern crate byteorder;
 extern crate separator;
 extern crate procinfo;
+extern crate toml;
+#[macro_use] extern crate serde_derive;
+extern crate serde;
 
 #[macro_use] extern crate failure;
 

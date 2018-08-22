@@ -35,11 +35,15 @@ pub struct Layer {
 
 impl Layers {
     pub fn from_file(filename: &str) -> Result<Self> {
-        tmsource::layers_from_file(filename)
+        Layers::from_tmsource_file(filename).or_else(|_| Layers::from_tegola_file(filename))
     }
 
     pub fn from_tmsource_file(filename: &str) -> Result<Self> {
         tmsource::layers_from_file(filename)
+    }
+
+    pub fn from_tegola_file(filename: &str) -> Result<Self> {
+        tegola::layers_from_file(filename)
     }
 
     pub fn get_all_connections(&self) -> HashMap<ConnectParams, Vec<String>> {
