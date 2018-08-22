@@ -364,19 +364,19 @@ fn worker_one_layer(printer_tx: Sender<printer::PrinterMessage>, fileio_tx: Sync
 fn tilejson_vector_layers(layers: &Layers, connection_pool: &ConnectionPool) -> Result<serde_json::Value> {
     Ok(json!(
             layers.layers.iter().map(|layer| {
-            let layer_name = &layer.id;
-            let columns: Vec<(String, String)> = columns_for_layer(layer, connection_pool)?;
-            let minzoom = layer.minzoom;
-            let maxzoom = layer.maxzoom;
-            let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
-            Ok(json!({
-                "id": layer_name,
-                "description": "",
-                "minzoom": minzoom,
-                "maxzoom": maxzoom,
-                "fields": columns.into_iter().collect::<HashMap<_, _>>(),
-            }))
-        }).collect::<Result<Vec<_>>>()?
+                let layer_name = &layer.id;
+                let columns: Vec<(String, String)> = columns_for_layer(layer, connection_pool)?;
+                let minzoom = layer.minzoom;
+                let maxzoom = layer.maxzoom;
+                let maxzoom = if maxzoom > layers.global_maxzoom { layers.global_maxzoom } else { maxzoom };
+                Ok(json!({
+                    "id": layer_name,
+                    "description": "",
+                    "minzoom": minzoom,
+                    "maxzoom": maxzoom,
+                    "fields": columns.into_iter().collect::<HashMap<_, _>>(),
+                }))
+            }).collect::<Result<Vec<_>>>()?
     ))
 }
 
