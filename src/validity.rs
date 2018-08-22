@@ -1213,7 +1213,7 @@ fn distribute_interiors<T: CoordinateType+Debug+Ord+Into<f64>>(mut polygons: &mu
             }
         }
         if !been_assigned {
-            warn!("Interior polygon idx {} can't be allocated to any exterior polygon", interior_idx);
+            warn!("Interior polygon can't be allocated to any exterior polygon");
         }
     }
 
