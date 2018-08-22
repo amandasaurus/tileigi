@@ -7,6 +7,8 @@ use std::fs;
 
 use LocalBBox;
 
+type Result<T> = std::result::Result<T, failure::Error>;
+
 mod tmsource;
 
 #[derive(Clone,Debug)]
@@ -31,11 +33,11 @@ pub struct Layer {
 }
 
 impl Layers {
-    pub fn from_file(filename: &str) -> Self {
+    pub fn from_file(filename: &str) -> Result<Self> {
         tmsource::layers_from_file(filename)
     }
 
-    pub fn from_tmsource_file(filename: &str) -> Self {
+    pub fn from_tmsource_file(filename: &str) -> Result<Self> {
         tmsource::layers_from_file(filename)
     }
 
