@@ -1,15 +1,23 @@
 == Unreleased
 
- * Fix modtile/metatile output format: incorrect 'offsets' were being saved.
- * Internal refactor for proper error handling
- * Refactoring to reduce memory usage, and speed up run time.
+=== Features
+
+ * Can now read from Tegola input files
  * tileigi command got `--quiet` argument to not print any messages while
    generating
- * TileJSON now stored in `metadata.json` rather than `index.json`, and
-   additional fields added from the input source
  * Can now use `!zoom!` (or `!ZOOM!`) in queries. It's replaced with current
    zoom. Bbox can be used with `!BBOX!` as well as `!bbox!`
  * Layers can now have boolean types.
+
+=== Bug Fixes
+
+ * Fix modtile/metatile output format: incorrect 'offsets' were being saved.
+
+=== Misc
+ * Internal refactor for proper error handling
+ * Refactoring to reduce memory usage, and speed up run time.
+ * TileJSON now stored in `metadata.json` rather than `index.json`, and
+   additional fields added from the input source
 
 == v0.8.0 (2018-05-10)
 
