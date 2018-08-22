@@ -7,6 +7,8 @@
    generating
  * TileJSON now stored in `metadata.json` rather than `index.json`, and
    additional fields added from the input source
+ * Can now use `!zoom!` (or `!ZOOM!`) in queries. It's replaced with current
+   zoom. Bbox can be used with `!BBOX!` as well as `!bbox!`
 
 == v0.8.0 (2018-05-10)
 
