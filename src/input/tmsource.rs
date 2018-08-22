@@ -67,6 +67,6 @@ pub fn layers_from_file(filename: &str) -> Result<Layers> {
         })
         .collect::<Result<Vec<Layer>>>()?;
 
-    Ok(Layers{ layers: layers, global_minzoom: global_minzoom, global_maxzoom: global_maxzoom, bounds: bounds, center: center, name: name, description: description })
+    Ok(Layers{ layers: layers, global_minzoom: global_minzoom, global_maxzoom: global_maxzoom, bounds: Some(bounds), center: Some(center), name: Some(name), description: Some(description) })
 
 }

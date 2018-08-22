@@ -10,16 +10,17 @@ use LocalBBox;
 type Result<T> = std::result::Result<T, failure::Error>;
 
 mod tmsource;
+mod tegola;
 
 #[derive(Clone,Debug)]
 pub struct Layers {
     pub layers: Vec<Layer>,
     pub global_maxzoom: u8,
     pub global_minzoom: u8,
-    pub bounds: [f64; 4],
-    pub center: [f64; 3],
-    pub name: String,
-    pub description: String,
+    pub bounds: Option<[f64; 4]>,
+    pub center: Option<[f64; 3]>,
+    pub name: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Clone,Debug)]
