@@ -429,6 +429,7 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Result<
                 "int8" => Some("Number".to_string()),
                 "numeric" => Some("Number".to_string()),
                 "varchar" => Some("String".to_string()),
+                "bool" => Some("Boolean".to_string()),
                 
                 // why is there unknown?
                 "unknown" => None,
@@ -656,6 +657,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
                 
                 // TODO not 100% sure numeric is correct here
                 "numeric" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Double)).unwrap_or(None),
+                "bool" => row.get_opt(name).map(|x| x.ok().map(mapbox_vector_tile::Value::Boolean)).unwrap_or(None),
                 
                 // why is there unknown?
                 "unknown" => None,
