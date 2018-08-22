@@ -76,6 +76,7 @@ pub struct TableSQL {
     pub has_pixel_width: bool,
     pub has_pixel_height: bool,
     pub has_scale_denominator: bool,
+    pub has_zoom: bool,
         
 }
 
@@ -84,6 +85,7 @@ impl TableSQL {
         let has_pixel_width = query.contains("!pixel_width!");
         let has_pixel_height = query.contains("!pixel_height!");
         let has_scale_denominator = query.contains("!scale_denominator!");
+        let has_zoom = query.contains("!zoom!") || query.contains("!ZOOM!");
 
         let mut query = query;
 
@@ -102,14 +104,19 @@ impl TableSQL {
             query = query.replace("!scale_denominator!", &format!("${}", param_num));
             param_num += 1;
         }
+        if has_zoom {
+            query = query.replace("!zoom!", &format!("${}", param_num));
+            query = query.replace("!ZOOM!", &format!("${}", param_num));
+            param_num += 1;
+        }
                 
         let query = format!("SELECT ST_AsBinary(way), * from {} where way && $1", query);
         TableSQL{
-            query, has_pixel_width, has_pixel_height, has_scale_denominator,
+            query, has_pixel_width, has_pixel_height, has_scale_denominator, has_zoom,
         }
     }
 
-    pub fn params<'a, T: num_traits::Float+Into<f64>+'a+std::fmt::Debug>(&self, bbox: &'a LocalBBox<T>, pixel_width: &'a f32, pixel_height: &'a f32, scale_denominator: &'a f32) -> Vec<&'a postgres::types::ToSql> {
+    pub fn params<'a, T: num_traits::Float+Into<f64>+'a+std::fmt::Debug>(&self, bbox: &'a LocalBBox<T>, pixel_width: &'a f32, pixel_height: &'a f32, zoom: &'a i32, scale_denominator: &'a f32) -> Vec<&'a postgres::types::ToSql> {
         // we always have bbox
         let mut results: Vec<&postgres::types::ToSql> = Vec::with_capacity(4);
         results.push(bbox);    // bbox
@@ -122,8 +129,10 @@ impl TableSQL {
         if self.has_scale_denominator {
             results.push(scale_denominator);
         }
+        if self.has_zoom {
+            results.push(zoom);
+        }
 
         results
     }
 }
-

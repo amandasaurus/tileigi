@@ -411,7 +411,8 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Result<
     let conn = connection_pool.connection_for_layer(&layer_name);
     
     let bbox = LocalBBox(0., 0., 0., 0.);
-    let res = conn.query(&layer.table.query, &layer.table.params(&bbox, &0., &0., &0.))?;
+    trace!("The query for layer {} is {:?}", layer_name, layer.table.query);
+    let res = conn.query(&layer.table.query, &layer.table.params(&bbox, &0., &0., &0, &0.))?;
 
     let cols = res.columns().iter()
         .filter_map(|column| {
@@ -530,9 +531,9 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
     let pixel_width = (tile_width / canvas_size) as f32;
     let pixel_height = (tile_height / canvas_size) as f32;
 
-    let scale_denom = scale_denominator_for_zoom(metatile.zoom());
+    let scale_denominator = scale_denominator_for_zoom(metatile.zoom());
     let stmt = conn.prepare_cached(&layer.table.query).unwrap();
-    let res = stmt.query(&table.params(&bbox, &pixel_width, &pixel_height, &scale_denom)).unwrap();
+    let res = stmt.query(&table.params(&bbox, &pixel_width, &pixel_height, &(metatile.zoom() as i32), &scale_denominator)).unwrap();
 
     if res.is_empty() {
         return results;
