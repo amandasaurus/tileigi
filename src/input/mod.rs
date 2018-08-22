@@ -90,6 +90,7 @@ impl TableSQL {
         let mut query = query;
 
         query = query.replace("!bbox!", "$1");
+        query = query.replace("!BBOX!", "$1");
 
         let mut param_num = 2;
         if has_pixel_width {
