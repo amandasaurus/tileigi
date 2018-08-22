@@ -111,7 +111,7 @@ impl TableSQL {
             param_num += 1;
         }
                 
-        let query = format!("SELECT ST_AsBinary(way), * from {} where way && $1", query);
+        let query = format!("SELECT ST_AsBinary(way::geometry), * from {} where way && $1", query);
         TableSQL{
             query, has_pixel_width, has_pixel_height, has_scale_denominator, has_zoom,
         }
