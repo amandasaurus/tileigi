@@ -173,6 +173,10 @@ fn scale_denominator_for_zoom(zoom: u8) -> f32 {
 
 pub fn generate_all(filename: &str, min_zoom: u8, max_zoom: u8, bbox: &Option<BBox>, dest: &TileDestinationType, if_not_exists: bool, compress: bool, metatile_scale: u8, num_threads: usize, tile_list: Option<String>, file_writer_buffer: usize, quiet: bool) -> Result<()> {
     let layers = Layers::from_file(filename)?;
+    if layers.layers.len() == 0 {
+        warn!("Zero layers defined. Possible configuration error?");
+        return Ok(());
+    }
 
     let connection_pool = ConnectionPool::new(layers.get_all_connections());
 
