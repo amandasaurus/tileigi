@@ -441,7 +441,7 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Result<
                 // Should this be Vec<u8>??
                 "bytea" => None,
                 x => {
-                    eprintln!("Postgres type {:?} not known for layer {:?}", x, layer);
+                    error!("Postgres type {:?} not known for layer {:?}", x, layer);
                     unimplemented!()
                 },
             };
@@ -454,6 +454,7 @@ fn columns_for_layer(layer: &Layer, connection_pool: &ConnectionPool) -> Result<
         })
         .collect();
     
+    trace!("columns: {:?}", cols);
     Ok(cols)
 }
 
@@ -667,7 +668,7 @@ fn single_layer(layer: &Layer, global_maxzoom: u8, metatile: &slippy_map_tiles::
                 // why is there unknown?
                 "unknown" => None,
                 x => {
-                    eprintln!("Postgres type {:?} not known", x);
+                    error!("Postgres type {:?} not known", x);
                     unimplemented!()
                 },
             };
