@@ -9,6 +9,7 @@
    additional fields added from the input source
  * Can now use `!zoom!` (or `!ZOOM!`) in queries. It's replaced with current
    zoom. Bbox can be used with `!BBOX!` as well as `!bbox!`
+ * Layers can now have boolean types.
 
 == v0.8.0 (2018-05-10)
 
