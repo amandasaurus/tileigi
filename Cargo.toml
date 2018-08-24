@@ -1,30 +1,35 @@
 [package]
-name = "tileigi"
-version = "0.8.0"
 authors = ["Rory McCann <rory@technomancy.org>"]
+name = "tileigi"
+version = "0.9.0"
 
 [dependencies]
-mapbox_vector_tile = { git = "https://github.com/rory/rust-mapbox-vector-tile", tag = "v0.3.0" }
-yaml-rust = "0.3"
-slippy-map-tiles = "0.14"
-postgres = "0.15.2"
-wkb = "0.2.0"
-geo = "0.7.3"
-clap = "2"
-serde_json = "1"
-users = "0.6.0"
-num-traits = "0.1"
-md5 = "0.3.6"
-rusqlite = "0.13.0"
 byteorder = "1.2.1"
-separator = "0.3.1"
-log = "0.4.1"
+clap = "2"
 env_logger = "0.5.6"
-procinfo = "0.4.2"
 failure = "0.1.2"
-toml = "0.4"
-serde_derive = "1.0"
+geo = "0.7.3"
+log = "0.4.1"
+md5 = "0.3.6"
+num-traits = "0.1"
+postgres = "0.15.2"
+procinfo = "0.4.2"
+rusqlite = "0.13.0"
+separator = "0.3.1"
 serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1"
+slippy-map-tiles = "0.14"
+toml = "0.4"
+users = "0.6.0"
+wkb = "0.2.0"
+yaml-rust = "0.3"
+
+[dependencies.mapbox_vector_tile]
+git = "https://github.com/rory/rust-mapbox-vector-tile"
+tag = "v0.3.0"
+
+[profile]
 
 [profile.release]
-debug=true
+debug = true
